@@ -1,0 +1,7 @@
+name "autoformat"
+description "Autoformatter of source code with git hooks"
+authors "Joakim Brännström"
+copyright "Copyright © 2017, Joakim Brännström"
+license "BSL-1.0"
+
+targetPath "build"
