@@ -1,0 +1,30 @@
+#!/bin/bash
+# vim: filetype=sh
+
+# If you want to formatting set this variable to true
+do_autoformat=$(git config hooks.autoformat)
+
+# Redirect output to stderr.
+exec 1>&2
+
+if git rev-parse --verify HEAD >/dev/null 2>&1
+then
+    against=HEAD
+else
+    # Initial commit: diff against an empty tree object
+    against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+hash autoformat 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    echo "No formatting. Missing autoformat in \$PATH"
+    exit 0
+elif [[ "$do_autoformat" = "auto" ]]; then
+    git diff --cached --name-only --diff-filter=AM $against | autoformat --no-backup --stdin
+elif [[ "$do_autoformat" = "interrupt" ]]; then
+    git diff --cached --name-only --diff-filter=AM $against | autoformat --no-backup --stdin --dry-run
+    exit $?
+fi
+
+exit 0
+

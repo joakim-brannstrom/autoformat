@@ -1,0 +1,48 @@
+#!/bin/bash
+# vim: filetype=sh
+
+GIT_MSG="$1"
+GIT_TYPE="$2"
+
+# If you want to formatting set this variable to true
+do_autoformat=$(git config hooks.autoformat)
+
+function writer() {
+case "$GIT_TYPE" in
+  message*)
+      echo "$1" ;;
+  *)
+      echo "$1" >> "$GIT_MSG" ;;
+esac
+}
+
+if [[ "$do_autoformat" = "auto" ]]; then
+    HDR=0
+    for LINE in $(git status --porcelain|grep -ZE "^MM|^AM"|sed -e "s/^MM//" -e "s/^AM//"); do
+        if [[ $HDR -eq 0 ]]; then
+            writer "# autoformatted the following files:"
+            HDR=1
+        fi
+        writer "#    $LINE"
+    done
+elif [[ "$do_autoformat" = "warn" ]]; then
+    if git rev-parse --verify HEAD >/dev/null 2>&1
+    then
+        against=HEAD
+    else
+        # Initial commit: diff against an empty tree object
+        against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+    fi
+    HDR=0
+    for file in $(git diff --cached --name-only --diff-filter=AM $against); do
+        autoformat --dry-run "$file"
+        if [[ $? -ne 0 ]]; then
+            if [[ $HDR -eq 0 ]]; then
+                writer "# WARNING the following files need to be formatted:"
+                HDR=1
+            fi
+            writer "#    $file"
+        fi
+    done
+fi
+
