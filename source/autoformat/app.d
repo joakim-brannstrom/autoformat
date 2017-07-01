@@ -28,6 +28,8 @@ import autoformat.types;
 immutable hookPreCommit = import("pre_commit");
 immutable hookPrepareCommitMsg = import("prepare_commit_msg");
 immutable gitConfigKey = "hooks.autoformat";
+immutable astyleConfRaw = import("astyle.conf");
+string[] astyleConf;
 
 enum FormatterStatus {
     /// failed autoformatting or some other kind of error
@@ -52,7 +54,8 @@ struct Config {
 int main(string[] args) {
     Config conf;
     GetoptResult help_info;
-    string errmsg;
+
+    .astyleConf = astyleConfRaw.splitter("\n").array();
 
     try {
         // dfmt off
@@ -417,22 +420,7 @@ void makeExecutable(string path) {
 
 auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     enum re_formatted = ctRegex!(`^\s*formatted.*`, "i");
-    // dfmt off
-    auto opts = ["--indent=spaces=4",
-            "--pad-oper",
-            "--indent-col1-comments",
-            "--unpad-paren",
-            "--pad-header",
-            "--convert-tabs",
-            "--indent-preprocessor",
-            "--align-pointer=type",
-            "--align-reference=type",
-            "--style=attach",
-            "--add-brackets",
-            "--max-instatement-indent=100",
-            "--lineend=linux"
-            ];
-    // dfmt on
+    auto opts = astyleConf;
 
     if (backup) {
         opts ~= "--suffix=.orig";
