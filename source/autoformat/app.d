@@ -51,7 +51,21 @@ struct Config {
     bool stdin;
 }
 
-int main(string[] args) {
+void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
+        string prettyFuncName = __PRETTY_FUNCTION__, string moduleName = __MODULE__, T...)(
+        lazy string msg, lazy T args) nothrow {
+    try {
+        logger.logf!(line, file, funcName, prettyFuncName, moduleName)(lvl, msg, args);
+    }
+    catch (Exception ex) {
+    }
+}
+
+alias infoLog(T...) = internalLog!(logger.LogLevel.info, T);
+alias traceLog(T...) = internalLog!(logger.LogLevel.trace, T);
+alias errorLog(T...) = internalLog!(logger.LogLevel.error, T);
+
+int main(string[] args) nothrow {
     Config conf;
     GetoptResult help_info;
 
@@ -72,47 +86,90 @@ int main(string[] args) {
         conf.help = help_info.helpWanted;
     }
     catch (std.getopt.GetOptException ex) {
-        logger.error(ex.msg);
+        errorLog(ex.msg);
         conf.help = true;
     }
     catch (Exception ex) {
-        logger.error(ex.msg);
+        errorLog(ex.msg);
         conf.help = true;
     }
 
-    if (conf.debug_) {
-        logger.globalLogLevel = logger.LogLevel.all;
-    } else {
-        logger.globalLogLevel = logger.LogLevel.info;
-        logger.sharedLog = new MyCustomLogger(logger.LogLevel.info);
+    try {
+        if (conf.debug_) {
+            logger.globalLogLevel = logger.LogLevel.all;
+        } else {
+            logger.globalLogLevel = logger.LogLevel.info;
+            logger.sharedLog = new MyCustomLogger(logger.LogLevel.info);
+        }
     }
-
-    logger.trace(conf);
+    catch (Exception ex) {
+        errorLog("Unable to configure internal logger");
+        errorLog(ex.msg);
+        return -1;
+    }
 
     if (conf.help) {
         printHelp(args[0], help_info);
-        return 1;
+        return -1;
     } else if (conf.setup) {
-        return setup(args);
+        try {
+            return setup(args);
+        }
+        catch (Exception ex) {
+            errorLog("Unable to perform the setup");
+            errorLog(ex.msg);
+            return -1;
+        }
     } else if (conf.installHook.length != 0) {
-        return installGitHook(AbsolutePath(conf.installHook));
+        try {
+            return installGitHook(AbsolutePath(conf.installHook));
+        }
+        catch (Exception ex) {
+            errorLog("Unable to install the git hook");
+            errorLog(ex.msg);
+            return -1;
+        }
     }
 
     if (conf.stdin) {
-        auto files = filesFromStdin;
-        return run(files, cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
+        try {
+            auto files = filesFromStdin;
+            return run(files, cast(Flag!"backup") !conf.noBackup,
+                    cast(Flag!"dryRun") conf.dryRun);
+        }
+        catch (Exception ex) {
+            errorLog("Unable to read a list of files separated by newline from stdin");
+            errorLog(ex.msg);
+            return -1;
+        }
     } else if (args.length != 2) {
         printHelp(args[0], help_info);
-        logger.error("Wrong number of arguments, probably missing the PATH");
-        return 1;
+        errorLog("Wrong number of arguments, probably missing the PATH");
+        return -1;
     }
 
     if (conf.recursive) {
-        return runRecursive(AbsolutePath(args[1]),
-                cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
+        try {
+            return runRecursive(AbsolutePath(args[1]),
+                    cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
+        }
+        catch (Exception ex) {
+            errorLog("Error during recursive processing of files");
+            errorLog(ex.msg);
+            return -1;
+        }
     } else {
-        return run(AbsolutePath(args[1]), cast(Flag!"backup") !conf.noBackup,
-                cast(Flag!"dryRun") conf.dryRun);
+        AbsolutePath p;
+        try {
+            p = AbsolutePath(args[1]);
+        }
+        catch (Exception ex) {
+            errorLog("Unable to transform to an absolute path: " ~ args[1]);
+            errorLog(ex.msg);
+            return -1;
+        }
+
+        return run(p, cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
     }
 }
 
@@ -145,8 +202,8 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
         }
 
         auto res = f.value.isOkToFormat;
-        if (res.hasValue) {
-            logger.errorf(" %s\t%s", f.index + 1, res.get!string);
+        if (!res.ok) {
+            logger.errorf(" %s\t%s", f.index + 1, res.payload);
             return FormatterStatus.ok;
         }
 
@@ -187,18 +244,18 @@ int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run)
     return run(files, backup, dry_run);
 }
 
-int run(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+int run(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     auto status = FormatterStatus.ok;
 
     auto res = path.isOkToFormat;
-    if (res.hasValue) {
-        logger.error(res.get!string);
+    if (!res.ok) {
+        errorLog(res.payload);
         return 1;
     }
 
     status = formatFile(path, backup, dry_run, (string a) { logger.error(a); });
 
-    logger.trace(status);
+    internalLog!(logger.LogLevel.info)("%", status);
     return status == FormatterStatus.ok ? 0 : -1;
 }
 
@@ -217,35 +274,48 @@ enum formatters = [
 // dfmt on
 
 FormatterStatus formatFile(T)(AbsolutePath p, Flag!"backup" backup,
-        Flag!"dryRun" dry_run, T msgFunc) {
-    logger.tracef("%s (backup:%s dryRun:%s)", p, backup, dry_run);
+        Flag!"dryRun" dry_run, T msgFunc) nothrow {
     FormatterStatus status;
 
-    foreach (f; formatters) {
-        if (f[0](p.extension)) {
-            auto res = f[1](p, backup, dry_run);
-            if (res.peek!string !is null) {
-                msgFunc(res.get!string());
-                status = FormatterStatus.error;
-                break;
-            } else if (res.peek!FormatterStatus !is null) {
-                status = res.get!FormatterStatus;
-                break;
+    try {
+        logger.tracef("%s (backup:%s dryRun:%s)", p, backup, dry_run);
+
+        foreach (f; formatters) {
+            if (f[0](p.extension)) {
+                auto res = f[1](p, backup, dry_run);
+                if (res.peek!string !is null) {
+                    msgFunc(res.get!string());
+                    status = FormatterStatus.error;
+                    break;
+                } else if (res.peek!FormatterStatus !is null) {
+                    status = res.get!FormatterStatus;
+                    break;
+                }
             }
         }
-    }
 
-    logger.trace(status);
+        logger.trace(status);
+    }
+    catch (Exception ex) {
+        errorLog("Unable to format file: " ~ p);
+        errorLog(ex.msg);
+    }
 
     return status;
 }
 
-void printHelp(string arg0, ref GetoptResult help_info) {
+void printHelp(string arg0, ref GetoptResult help_info) nothrow {
     import std.format : format;
 
-    defaultGetoptPrinter(format(`Tool to format [c, c++, java] source code
+    try {
+        defaultGetoptPrinter(format(`Tool to format [c, c++, java] source code
 Usage: %s [options] PATH`,
-            arg0), help_info.options);
+                arg0), help_info.options);
+    }
+    catch (Exception ex) {
+        errorLog("Unable to print command line interface help information to stdout");
+        errorLog(ex.msg);
+    }
 }
 
 int setup(string[] args) {
@@ -480,7 +550,7 @@ auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
 
 enum filetypeCheckers = [&isC_CppFiletype, &isDFiletype, &isJavaFiletype];
 
-bool isFiletypeSupported(AbsolutePath p) {
+bool isFiletypeSupported(AbsolutePath p) nothrow {
     foreach (f; filetypeCheckers) {
         if (f(p.extension)) {
             return true;
@@ -490,41 +560,52 @@ bool isFiletypeSupported(AbsolutePath p) {
     return false;
 }
 
-bool isC_CppFiletype(string p) {
+bool isC_CppFiletype(string p) nothrow {
     return p.among(".c", ".cpp", ".cxx", ".h", ".hpp") != 0;
 }
 
-bool isDFiletype(string p) {
+bool isDFiletype(string p) nothrow {
     return p.among(".d", "di") != 0;
 }
 
-bool isJavaFiletype(string p) {
+bool isJavaFiletype(string p) nothrow {
     return p.among(".java") != 0;
 }
 
-auto isOkToFormat(AbsolutePath p) {
-    alias Result = Variant;
+auto isOkToFormat(AbsolutePath p) nothrow {
+    struct Result {
+        string payload;
+        bool ok;
+    }
+
     Result res;
 
     if (!exists(p)) {
-        res = "file not found: " ~ p;
+        res = Result("file not found: " ~ p);
     } else if (!isFiletypeSupported(p)) {
-        res = "filetype not supported: " ~ p;
+        res = Result("filetype not supported: " ~ p);
     } else {
         string w = p;
         while (w != "/") {
             if (exists(buildPath(w, "matlab.xml"))) {
-                res = "matlab generated code";
+                res = Result("matlab generated code");
                 break;
-            } else if (isGitRoot(AbsolutePath(w))) {
-                break;
+            }
+
+            try {
+                auto a = AbsolutePath(w);
+                if (isGitRoot(a)) {
+                    break;
+                }
+            }
+            catch (Exception ex) {
             }
 
             w = dirName(w);
         }
     }
 
-    return res;
+    return Result(null, true);
 }
 
 class MyCustomLogger : logger.Logger {
