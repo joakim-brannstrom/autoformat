@@ -30,6 +30,7 @@ immutable hookPrepareCommitMsg = import("prepare_commit_msg");
 immutable gitConfigKey = "hooks.autoformat";
 immutable astyleConfRaw = import("astyle.conf");
 string[] astyleConf;
+bool debugMode;
 
 enum FormatterStatus {
     /// failed autoformatting or some other kind of error
@@ -93,6 +94,8 @@ int main(string[] args) nothrow {
         errorLog(ex.msg);
         conf.help = true;
     }
+
+    debugMode = conf.debug_;
 
     try {
         if (conf.debug_) {
@@ -161,7 +164,7 @@ int main(string[] args) nothrow {
     }
 
     AbsolutePath[] files;
-    foreach (f; args[1 .. $].filter!(a => a.length != 0)) {
+    foreach (f; args[1 .. $]) {
         try {
             files ~= AbsolutePath(f);
         }
@@ -214,7 +217,7 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
 
     static FormatterStatus oneFile(T)(T f) nothrow {
         try {
-            if (f.value.isDir) {
+            if (f.value.isDir || f.value.extension.length == 0) {
                 return FormatterStatus.ok;
             }
         }
@@ -233,10 +236,9 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
             return FormatterStatus.ok;
         }
 
-        FormatterStatus resf;
         try {
             logger.infof("  %s\t%s", f.index + 1, f.value);
-            resf = formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
+            return formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
                 logger.error(a);
             });
         }
@@ -244,7 +246,7 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
             errorLog(ex.msg);
         }
 
-        return resf;
+        return FormatterStatus.ok;
     }
 
     static struct Entry(T) {
@@ -254,9 +256,15 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
         alias payload this;
     }
 
-    auto files = files_.enumerate.map!(a => Entry!(typeof(a))(backup, dry_run, a)).array();
+    auto files = files_.filter!(a => a.length > 0)
+        .enumerate.map!(a => Entry!(typeof(a))(backup, dry_run, a)).array();
 
-    auto pool = new TaskPool;
+    TaskPool pool;
+    if (debugMode) {
+        pool = new TaskPool(1);
+    } else {
+        pool = new TaskPool;
+    }
     scope (exit)
         pool.stop;
     logger.info("Formatting files");
@@ -597,7 +605,7 @@ auto isOkToFormat(AbsolutePath p) nothrow {
         bool ok;
     }
 
-    Result res;
+    auto res = Result(null, true);
 
     if (!exists(p)) {
         res = Result("file not found: " ~ p);
@@ -624,7 +632,7 @@ auto isOkToFormat(AbsolutePath p) nothrow {
         }
     }
 
-    return Result(null, true);
+    return res;
 }
 
 class MyCustomLogger : logger.Logger {
