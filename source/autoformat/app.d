@@ -385,9 +385,12 @@ int installGitHook(AbsolutePath install_to, AbsolutePath autoformat_bin) {
         import std.utf;
 
         string s = format("$GIT_DIR/hooks/%s $@", raw);
+        // remove the old hook so it doesn't collide. This will probably have
+        // to stay until 2019.
+        string remove = format("source $GIT_DIR/hooks/%s", raw);
 
         if (exists(p)) {
-            auto content = File(p).byLine.appendUnique(s).joiner("\n").text;
+            auto content = File(p).byLine.appendUnique(s, remove).joiner("\n").text;
             auto f = File(p, "w");
             f.writeln(content);
         } else {
@@ -435,7 +438,7 @@ int installGitHook(AbsolutePath install_to, AbsolutePath autoformat_bin) {
 }
 
 /// Append the string to the range if it doesn't exist.
-auto appendUnique(T)(T r, string msg) if (isInputRange!T) {
+auto appendUnique(T)(T r, string msg, string remove) if (isInputRange!T) {
     enum State {
         analyzing,
         found,
@@ -445,6 +448,7 @@ auto appendUnique(T)(T r, string msg) if (isInputRange!T) {
 
     struct Result {
         string msg;
+        string remove;
         T r;
         State st;
 
@@ -468,6 +472,8 @@ auto appendUnique(T)(T r, string msg) if (isInputRange!T) {
                 r.popFront;
                 if (r.empty) {
                     st = State.append;
+                } else if (r.front == remove) {
+                    popFront;
                 } else if (r.front == msg) {
                     st = State.found;
                 }
@@ -489,23 +495,24 @@ auto appendUnique(T)(T r, string msg) if (isInputRange!T) {
         }
     }
 
-    return Result(msg, r);
+    return Result(msg, remove, r);
 }
 
 @("shall append the message if it doesn't exist")
 unittest {
     string msg = "append me";
+    string remove = "remove me";
 
-    string[] text_with_msg = "foo\nbar\nappend me\nfjump\n".split("\n");
-    string[] text_missing_msg = "foo\nbar\nfjump\n".split("\n");
+    string[] text_with_msg = "foo\nbar\nappend me\nfjump\nremove me\n".split("\n");
+    string[] text_missing_msg = "foo\nremove me\nbar\nfjump\n".split("\n");
 
     {
-        string[] result = text_with_msg.appendUnique(msg).array();
+        string[] result = text_with_msg.appendUnique(msg, remove).array();
         writeln(text_with_msg, result);
         assert(cmp(result, text_with_msg) == 0);
     }
     {
-        string[] result = text_missing_msg.appendUnique(msg).array();
+        string[] result = text_missing_msg.appendUnique(msg, remove).array();
         writeln(text_missing_msg, result);
         assert(cmp(result, text_missing_msg ~ [msg]) == 0);
     }
