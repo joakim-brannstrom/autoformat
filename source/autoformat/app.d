@@ -142,9 +142,9 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
-    } else if (args.length != 2) {
+    } else if (args.length < 2) {
         printHelp(args[0], help_info);
-        errorLog("Wrong number of arguments, probably missing the PATH");
+        errorLog("Wrong number of arguments, probably missing the FILE(s)");
         return -1;
     }
 
@@ -158,19 +158,35 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
-    } else {
-        AbsolutePath p;
+    }
+
+    AbsolutePath[] files;
+    foreach (f; args[1 .. $].filter!(a => a.length != 0)) {
         try {
-            p = AbsolutePath(args[1]);
+            files ~= AbsolutePath(f);
         }
         catch (Exception ex) {
-            errorLog("Unable to transform to an absolute path: " ~ args[1]);
+            errorLog("Unable to transform to an absolute path: " ~ f);
             errorLog(ex.msg);
             return -1;
         }
-
-        return run(p, cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
     }
+
+    if (files.length == 0) {
+        printHelp(args[0], help_info);
+        errorLog("Wrong number of arguments, probably missing the FILE(s)");
+        return -1;
+    }
+
+    try {
+        return run(files, cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
+    }
+    catch (Exception ex) {
+        errorLog("Failed to run");
+        errorLog(ex.msg);
+    }
+
+    return -1;
 }
 
 AbsolutePath[] filesFromStdin() {
@@ -196,21 +212,37 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
         }
     }
 
-    static FormatterStatus oneFile(T)(T f) {
-        if (f.value.isDir) {
+    static FormatterStatus oneFile(T)(T f) nothrow {
+        try {
+            if (f.value.isDir) {
+                return FormatterStatus.ok;
+            }
+        }
+        catch (Exception ex) {
             return FormatterStatus.ok;
         }
 
         auto res = f.value.isOkToFormat;
         if (!res.ok) {
-            logger.errorf(" %s\t%s", f.index + 1, res.payload);
+            try {
+                logger.errorf(" %s\t%s", f.index + 1, res.payload);
+            }
+            catch (Exception ex) {
+                errorLog(ex.msg);
+            }
             return FormatterStatus.ok;
         }
 
-        logger.infof("  %s\t%s", f.index + 1, f.value);
-        auto resf = formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
-            logger.error(a);
-        });
+        FormatterStatus resf;
+        try {
+            logger.infof("  %s\t%s", f.index + 1, f.value);
+            resf = formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
+                logger.error(a);
+            });
+        }
+        catch (Exception ex) {
+            errorLog(ex.msg);
+        }
 
         return resf;
     }
@@ -225,6 +257,8 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     auto files = files_.enumerate.map!(a => Entry!(typeof(a))(backup, dry_run, a)).array();
 
     auto pool = new TaskPool;
+    scope (exit)
+        pool.stop;
     logger.info("Formatting files");
     auto status = pool.reduce!merge(FormatterStatus.ok, std.algorithm.map!oneFile(files));
     pool.finish;
@@ -242,21 +276,6 @@ int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run)
     auto files = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
 
     return run(files, backup, dry_run);
-}
-
-int run(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    auto status = FormatterStatus.ok;
-
-    auto res = path.isOkToFormat;
-    if (!res.ok) {
-        errorLog(res.payload);
-        return 1;
-    }
-
-    status = formatFile(path, backup, dry_run, (string a) { logger.error(a); });
-
-    internalLog!(logger.LogLevel.info)("%", status);
-    return status == FormatterStatus.ok ? 0 : -1;
 }
 
 alias FormatterResult = Algebraic!(string, FormatterStatus);
