@@ -15,25 +15,25 @@ else
     against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
 fi
 
-BINARY=autoformat
-FALLBACK_BINARY=%s
+AUTOFORMAT=autoformat
+FALLBACK_AUTOFORMAT=%s
 
-hash $BINARY 2>/dev/null
+hash $AUTOFORMAT 2>/dev/null
 if [[ $? -ne 0 ]]; then
-    type $FALLBACK_BINARY 2>/dev/null
+    type $FALLBACK_AUTOFORMAT 2>/dev/null
     if [[ $? -ne 0 ]]; then
         echo "No autoform binary in \$PATH"
         exit 0
     else
-        BINARY=$FALLBACK_BINARY
-        echo "No autoformat in \$PATH, using fallback $BINARY"
+        AUTOFORMAT=$FALLBACK_AUTOFORMAT
+        echo "No autoformat in \$PATH, using fallback $AUTOFORMAT"
     fi
 fi
 
 if [[ "$do_autoformat" = "auto" ]]; then
-    git diff --cached --name-only --diff-filter=AM $against | $BINARY --no-backup --stdin
+    git diff --cached --name-only --diff-filter=AM $against | $AUTOFORMAT --no-backup --stdin
 elif [[ "$do_autoformat" = "interrupt" ]]; then
-    git diff --cached --name-only --diff-filter=AM $against | $BINARY --no-backup --stdin --dry-run
+    git diff --cached --name-only --diff-filter=AM $against | $AUTOFORMAT --no-backup --stdin --dry-run
     if [[ $? -ne 0 ]]; then
         echo "Commit interrupted because unformatted files found"
         exit 1

@@ -377,12 +377,14 @@ int installGitHook(AbsolutePath install_to, AbsolutePath autoformat_bin) {
     static void createHook(AbsolutePath hook_p, string msg) {
         auto f = File(hook_p, "w");
         f.write(msg);
+        f.close;
+        makeExecutable(hook_p);
     }
 
     static void injectHook(AbsolutePath p, string raw) {
         import std.utf;
 
-        string s = format("source $GIT_DIR/hooks/%s", raw);
+        string s = format("$GIT_DIR/hooks/%s $@", raw);
 
         if (exists(p)) {
             auto content = File(p).byLine.appendUnique(s).joiner("\n").text;

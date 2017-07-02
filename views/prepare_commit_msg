@@ -8,12 +8,12 @@ GIT_TYPE="$2"
 do_autoformat=$(git config hooks.autoformat)
 
 function writer() {
-case "$GIT_TYPE" in
-  message*)
-      echo "$1" ;;
-  *)
-      echo "$1" >> "$GIT_MSG" ;;
-esac
+    case "$GIT_TYPE" in
+      message*)
+          echo "$1" ;;
+      *)
+          echo "$1" >> "$GIT_MSG" ;;
+    esac
 }
 
 if [[ "$do_autoformat" = "auto" ]]; then

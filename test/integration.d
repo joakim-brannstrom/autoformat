@@ -136,11 +136,11 @@ void testInjectGitHook(const string root) {
     assert(autoformat("-i", ta.root).status == 0);
 
     auto pre_commit = std.file.readText(buildPath(ta.root, ".git", "hooks", "pre-commit"));
-    assert(!matchAll(pre_commit, `.*source \$GIT_DIR/hooks/autoformat_pre-commit.*`).empty);
+    assert(!matchAll(pre_commit, `.*\$GIT_DIR/hooks/autoformat_pre-commit \$@.*`).empty);
     auto prepare_commit_msg = std.file.readText(buildPath(ta.root, ".git",
             "hooks", "prepare-commit-msg"));
     assert(!matchAll(prepare_commit_msg,
-            `.*source \$GIT_DIR/hooks/autoformat_prepare-commit-msg.*`).empty);
+            `.*\$GIT_DIR/hooks/autoformat_prepare-commit-msg \$@.*`).empty);
 }
 
 void testBackup(const string root) {
