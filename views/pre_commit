@@ -23,7 +23,10 @@ elif [[ "$do_autoformat" = "auto" ]]; then
     git diff --cached --name-only --diff-filter=AM $against | autoformat --no-backup --stdin
 elif [[ "$do_autoformat" = "interrupt" ]]; then
     git diff --cached --name-only --diff-filter=AM $against | autoformat --no-backup --stdin --dry-run
-    exit $?
+    if [[ $? -ne 0 ]]; then
+        echo "Commit interrupted because unformatted files found"
+        exit 1
+    fi
 fi
 
 exit 0
