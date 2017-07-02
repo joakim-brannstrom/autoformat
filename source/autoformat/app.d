@@ -28,8 +28,10 @@ import autoformat.types;
 immutable hookPreCommit = import("pre_commit");
 immutable hookPrepareCommitMsg = import("prepare_commit_msg");
 immutable gitConfigKey = "hooks.autoformat";
-immutable astyleConfRaw = import("astyle.conf");
-string[] astyleConf;
+immutable string[] astyleConf = import("astyle.conf").splitter("\n")
+    .filter!(a => a.length > 0).array();
+immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoformat_filenames.conf")
+    .splitter("\n").filter!(a => a.length > 0).array();
 bool debugMode;
 
 enum FormatterStatus {
@@ -69,8 +71,6 @@ alias errorLog(T...) = internalLog!(logger.LogLevel.error, T);
 int main(string[] args) nothrow {
     Config conf;
     GetoptResult help_info;
-
-    .astyleConf = astyleConfRaw.splitter("\n").filter!(a => a.length > 0).array();
 
     try {
         // dfmt off
@@ -517,7 +517,7 @@ void makeExecutable(string path) {
 
 auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     enum re_formatted = ctRegex!(`^\s*formatted.*`, "i");
-    auto opts = astyleConf;
+    string[] opts = astyleConf.map!(a => a.idup).array();
 
     if (backup) {
         opts ~= "--suffix=.orig";
@@ -614,9 +614,10 @@ auto isOkToFormat(AbsolutePath p) nothrow {
     } else {
         string w = p;
         while (w != "/") {
-            if (exists(buildPath(w, "matlab.xml"))) {
-                res = Result("matlab generated code");
-                break;
+            foreach (check; suppressAutoformatFilenames.map!(a => buildPath(w, a))) {
+                if (exists(check)) {
+                    return Result("autoformat blocked by " ~ check);
+                }
             }
 
             try {

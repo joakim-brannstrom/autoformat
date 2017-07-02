@@ -244,13 +244,15 @@ void testRecursiveSkipDir(const string root) {
 
         if (i == 55) {
             run("touch", buildPath(base_dir, "matlab.xml"));
+        } else if (i == 72) {
+            run("touch", buildPath(base_dir, ".noautoformat"));
         } else {
             createUnformattedFile(buildPath(base_dir, "file_" ~ i.to!string ~ ".cpp"));
         }
     }
 
     assert(autoformat("-r", ta.root).status == 0);
-    assert(dirEntries(".", SpanMode.depth).filter!(a => a.baseName.endsWith(".orig")).count == 91);
+    assert(dirEntries(".", SpanMode.depth).filter!(a => a.baseName.endsWith(".orig")).count == 81);
 }
 
 void createRepo() {
