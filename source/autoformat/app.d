@@ -69,7 +69,7 @@ int main(string[] args) nothrow {
     Config conf;
     GetoptResult help_info;
 
-    .astyleConf = astyleConfRaw.splitter("\n").array();
+    .astyleConf = astyleConfRaw.splitter("\n").filter!(a => a.length > 0).array();
 
     try {
         // dfmt off
