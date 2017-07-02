@@ -34,9 +34,16 @@ int main(string[] args) {
     autoformatBinary = autoformatBinary.absolutePath;
     logger.globalLogLevel = logger.LogLevel.all;
 
-    bool debug_;
     getopt(args, std.getopt.config.keepEndOfOptions, "d|debug",
-            "debug and keep the test directories", &debug_,);
+            "debug and keep the test directories", &debugMode);
+
+    chdir("..");
+    auto res = execute(["dub", "build"]);
+    res.output.writeln;
+    if (res.status != 0) {
+        return -1;
+    }
+    chdir(root);
 
     testFormatOneFile(root);
     testFormatFiles(root);
@@ -54,7 +61,7 @@ int main(string[] args) {
     testRecursiveSkipDir(root);
 
     foreach (p; dirEntries(root, SpanMode.shallow).filter!(a => a.name.baseName.startsWith("tmp_"))) {
-        if (debug_) {
+        if (debugMode) {
             writeln("rm -rf ", p);
         } else {
             run("rm", "-rf", p);
@@ -310,7 +317,7 @@ auto run(T...)(string cmd, T args_) {
         args ~= arg;
     }
 
-    logger.trace("run: ", args.join(" "));
+    logger.trace(debugMode, "run: ", args.join(" "));
     auto r = execute(args);
     if (r.status != 0) {
         logger.info(r.output);
