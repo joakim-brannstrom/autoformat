@@ -125,7 +125,7 @@ int main(string[] args) nothrow {
         }
     } else if (conf.installHook.length != 0) {
         try {
-            return installGitHook(AbsolutePath(conf.installHook));
+            return installGitHook(AbsolutePath(conf.installHook), AbsolutePath(args[0]));
         }
         catch (Exception ex) {
             errorLog("Unable to install the git hook");
@@ -359,7 +359,7 @@ int setup(string[] args) {
     return 0;
 }
 
-int installGitHook(AbsolutePath install_to) {
+int installGitHook(AbsolutePath install_to, AbsolutePath autoformat_bin) {
     static void usage() {
         if (gitConfigValue(gitConfigKey).among("auto", "warn", "interrupt")) {
             return;
@@ -422,7 +422,7 @@ int installGitHook(AbsolutePath install_to) {
     auto git_auto_pre_commit = buildPath(hook_dir, "autoformat_pre-commit");
     auto git_auto_pre_msg = buildPath(hook_dir, "autoformat_prepare-commit-msg");
     logger.info("Installing git hooks to: ", install_to);
-    createHook(AbsolutePath(git_auto_pre_commit), hookPreCommit);
+    createHook(AbsolutePath(git_auto_pre_commit), format(hookPreCommit, autoformat_bin));
     createHook(AbsolutePath(git_auto_pre_msg), hookPrepareCommitMsg);
     injectHook(AbsolutePath(git_pre_commit), git_auto_pre_commit.baseName);
     injectHook(AbsolutePath(git_pre_msg), git_auto_pre_msg.baseName);
