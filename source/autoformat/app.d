@@ -75,7 +75,7 @@ int main(string[] args) nothrow {
     try {
         // dfmt off
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
-            "stdin", "file read from stdin separated by linebreak", &conf.stdin,
+            "stdin", "file list separated by newline read from", &conf.stdin,
             "d|debug", "change loglevel to debug", &conf.debug_,
             "n|dry-run", "perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &conf.dryRun,
             "no-backup", "no backup file is created", &conf.noBackup,
