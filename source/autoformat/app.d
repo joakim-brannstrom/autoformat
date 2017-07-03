@@ -532,7 +532,6 @@ void makeExecutable(string path) {
 }
 
 auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
-    enum re_formatted = ctRegex!(`^\s*formatted.*`, "i");
     string[] opts = astyleConf.map!(a => a.idup).array();
 
     if (backup) {
@@ -542,7 +541,7 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
     }
 
     if (dry_run) {
-        opts ~= "--dry-run";
+        opts ~= ["--dry-run", "-Q"];
     }
 
     auto rval = FormatterResult(FormatterStatus.error);
@@ -553,7 +552,7 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
         auto res = execute(arg);
         logger.trace(res.output);
 
-        if (dry_run && matchFirst(res.output, re_formatted)) {
+        if (dry_run && res.output.length != 0) {
             rval = FormatterResult(FormatterStatus.wouldChange);
         } else {
             rval = FormatterStatus.ok;
