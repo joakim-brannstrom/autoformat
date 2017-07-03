@@ -215,10 +215,10 @@ AbsolutePath[] filesFromStdin() {
 int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     static FormatterStatus merge(FormatterStatus a, FormatterStatus b) {
         // when a is an error it can never change
-        if (a != FormatterStatus.ok) {
-            return a;
-        } else {
+        if (b != FormatterStatus.ok) {
             return b;
+        } else {
+            return a;
         }
     }
 
