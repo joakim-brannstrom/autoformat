@@ -16,16 +16,16 @@ else
 fi
 
 AUTOFORMAT=autoformat
-FALLBACK_AUTOFORMAT=%s
+FALLBACK_AUTOFORMAT="%s"
 
-hash $AUTOFORMAT 2>/dev/null
+hash $AUTOFORMAT >/dev/null 2>/dev/null
 if [[ $? -ne 0 ]]; then
-    type $FALLBACK_AUTOFORMAT 2>/dev/null
+    type $FALLBACK_AUTOFORMAT >/dev/null 2>/dev/null
     if [[ $? -ne 0 ]]; then
         echo "No autoform binary in \$PATH"
         exit 0
     else
-        AUTOFORMAT=$FALLBACK_AUTOFORMAT
+        AUTOFORMAT="$FALLBACK_AUTOFORMAT"
         echo "No autoformat in \$PATH, using fallback $AUTOFORMAT"
     fi
 fi
