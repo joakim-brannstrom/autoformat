@@ -16,6 +16,19 @@ function writer() {
     esac
 }
 
+AUTOFORMAT=autoformat
+FALLBACK_AUTOFORMAT="%s"
+
+hash $AUTOFORMAT >/dev/null 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    type $FALLBACK_AUTOFORMAT >/dev/null 2>/dev/null
+    if [[ $? -ne 0 ]]; then
+        exit 0
+    else
+        AUTOFORMAT="$FALLBACK_AUTOFORMAT"
+    fi
+fi
+
 if [[ "$do_autoformat" = "auto" ]]; then
     HDR=0
     for LINE in $(git status --porcelain|grep -ZE "^MM|^AM"|sed -e "s/^MM//" -e "s/^AM//"); do
@@ -35,7 +48,7 @@ elif [[ "$do_autoformat" = "warn" ]]; then
     fi
     HDR=0
     for file in $(git diff --cached --name-only --diff-filter=AM $against); do
-        autoformat --dry-run "$file"
+        $AUTOFORMAT --dry-run "$file" >/dev/null
         if [[ $? -ne 0 ]]; then
             if [[ $HDR -eq 0 ]]; then
                 writer "# WARNING the following files need to be formatted:"

@@ -435,7 +435,7 @@ int installGitHook(AbsolutePath install_to, AbsolutePath autoformat_bin) {
     auto git_auto_pre_msg = buildPath(hook_dir, "autoformat_prepare-commit-msg");
     logger.info("Installing git hooks to: ", install_to);
     createHook(AbsolutePath(git_auto_pre_commit), format(hookPreCommit, autoformat_bin));
-    createHook(AbsolutePath(git_auto_pre_msg), hookPrepareCommitMsg);
+    createHook(AbsolutePath(git_auto_pre_msg), format(hookPrepareCommitMsg, autoformat_bin));
     injectHook(AbsolutePath(git_pre_commit), git_auto_pre_commit.baseName);
     injectHook(AbsolutePath(git_pre_msg), git_auto_pre_msg.baseName);
 
