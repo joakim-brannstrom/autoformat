@@ -660,6 +660,10 @@ class MyCustomLogger : logger.Logger {
     }
 
     override void writeLogMsg(ref LogEntry payload) @trusted {
-        stderr.writefln("%s: %s", payload.logLevel, payload.msg);
+        if (payload.logLevel.among(LogLevel.info, LogLevel.trace)) {
+            stdout.writefln("%s: %s", payload.logLevel, payload.msg);
+        } else {
+            stderr.writefln("%s: %s", payload.logLevel, payload.msg);
+        }
     }
 }
