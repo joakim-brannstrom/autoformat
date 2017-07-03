@@ -124,8 +124,15 @@ int main(string[] args) nothrow {
             return -1;
         }
     } else if (conf.installHook.length != 0) {
+        string abs_path_to_binary;
         try {
-            return installGitHook(AbsolutePath(conf.installHook), AbsolutePath(args[0]));
+            abs_path_to_binary = std.file.readLink("/proc/self/exe");
+        } catch (Exception ex) {
+            errorLog("Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0]);
+            abs_path_to_binary = args[0];
+        }
+        try {
+            return installGitHook(AbsolutePath(conf.installHook), AbsolutePath(abs_path_to_binary));
         }
         catch (Exception ex) {
             errorLog("Unable to install the git hook");
