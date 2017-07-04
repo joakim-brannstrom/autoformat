@@ -36,21 +36,35 @@ immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoform
 enum FormatterStatus {
     /// failed autoformatting or some other kind of error
     error,
-    /// autoformatting done and it went okey
+    /// autoformatting done and it went ok
     ok,
     /// The file would change if it where autoformatted
     wouldChange,
 }
 
+/// Active modes depending on the flags passed by the user.
+enum Mode {
+    /// Print help and exit
+    helpAndExit,
+    /// Create the symlinks to emulate the old autoformatter written in python
+    setup,
+    /// Install git hooks
+    installGitHook,
+    /// Process recursively
+    recursive,
+    /// Normal mode which is one or more files from command line
+    normal
+}
+
 struct Config {
     Flag!"debugMode" debug_;
     Flag!"dryRun" dryRun;
-    bool help = false;
     string installHook;
     Flag!"backup" backup;
     Flag!"recursive" recursive;
-    Flag!"setup" setup;
     Flag!"stdin" stdin;
+
+    Mode mode;
 }
 
 void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
@@ -74,14 +88,7 @@ int main(string[] args) nothrow {
     parseArgs(args, conf, help_info);
 
     try {
-        if (conf.debug_) {
-            logger.globalLogLevel = logger.LogLevel.all;
-        } else {
-            import autoformat.logger;
-
-            logger.globalLogLevel = logger.LogLevel.info;
-            logger.sharedLog = new CustomLogger(logger.LogLevel.info);
-        }
+        confLogger(conf.debug_);
     }
     catch (Exception ex) {
         errorLog("Unable to configure internal logger");
@@ -89,10 +96,11 @@ int main(string[] args) nothrow {
         return -1;
     }
 
-    if (conf.help) {
+    final switch (conf.mode) {
+    case Mode.helpAndExit:
         printHelp(args[0], help_info);
         return -1;
-    } else if (conf.setup) {
+    case Mode.setup:
         try {
             return setup(args);
         }
@@ -101,7 +109,7 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
-    } else if (conf.installHook.length != 0) {
+    case Mode.installGitHook:
         string abs_path_to_binary;
         try {
             abs_path_to_binary = std.file.readLink("/proc/self/exe");
@@ -119,6 +127,10 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
+    case Mode.recursive:
+        break;
+    case Mode.normal:
+        break;
     }
 
     if (conf.stdin) {
@@ -178,7 +190,8 @@ int main(string[] args) nothrow {
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
-    bool debug_, dryRun, noBackup, recursive, setup, stdin_;
+    bool debug_, dryRun, noBackup, recursive, setup, stdin_, help;
+
     try {
         // dfmt off
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
@@ -195,17 +208,37 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.dryRun = cast(typeof(Config.dryRun)) dryRun;
         conf.backup = cast(typeof(Config.backup)) !noBackup;
         conf.recursive = cast(typeof(Config.recursive)) recursive;
-        conf.setup = cast(typeof(Config.setup)) setup;
         conf.stdin = cast(typeof(Config.stdin)) stdin_;
-        conf.help = help_info.helpWanted;
+        help = help_info.helpWanted;
     }
     catch (std.getopt.GetOptException ex) {
         errorLog(ex.msg);
-        conf.help = true;
+        help = true;
     }
     catch (Exception ex) {
         errorLog(ex.msg);
-        conf.help = true;
+        help = true;
+    }
+
+    conf.mode = Mode.normal;
+
+    if (help) {
+        conf.mode = Mode.helpAndExit;
+    } else if (setup) {
+        conf.mode = Mode.setup;
+    } else if (conf.installHook.length != 0) {
+        conf.mode = Mode.installGitHook;
+    }
+}
+
+void confLogger(Flag!"debugMode" debug_) {
+    if (debug_) {
+        logger.globalLogLevel = logger.LogLevel.all;
+    } else {
+        import autoformat.logger;
+
+        logger.globalLogLevel = logger.LogLevel.info;
+        logger.sharedLog = new CustomLogger(logger.LogLevel.info);
     }
 }
 
