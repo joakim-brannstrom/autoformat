@@ -19,7 +19,7 @@ import std.path;
 import autoformat.git;
 import autoformat.types;
 
-enum filetypeCheckers = [&isC_CppFiletype, &isDFiletype, &isJavaFiletype];
+enum filetypeCheckers = [&isC_CppFiletype, &isDFiletype, &isJavaFiletype, &isPythonFiletype];
 
 immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoformat_filenames.conf")
     .splitter("\n").filter!(a => a.length > 0).array();
@@ -44,6 +44,10 @@ bool isDFiletype(string p) nothrow {
 
 bool isJavaFiletype(string p) nothrow {
     return p.among(".java") != 0;
+}
+
+bool isPythonFiletype(string p) nothrow {
+    return p.among(".py") != 0;
 }
 
 auto isOkToFormat(AbsolutePath p) nothrow {

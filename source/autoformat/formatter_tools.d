@@ -13,6 +13,7 @@ module autoformat.formatter_tools;
 
 import std.typecons : Flag, Tuple;
 
+public import autoformat.autopep8;
 public import autoformat.astyle;
 public import autoformat.filetype : isOkToFormat;
 public import autoformat.dfmt;
@@ -29,6 +30,7 @@ alias Formatter = Tuple!(FormatterCheckFunc, FormatterFunc);
 enum formatters = [
     Formatter(&isC_CppFiletype, &runAstyle),
     Formatter(&isJavaFiletype, &runAstyle),
-    Formatter(&isDFiletype, &runDfmt)
+    Formatter(&isDFiletype, &runDfmt),
+    Formatter(&isPythonFiletype, &runAutoPep8),
 ];
 // dfmt on

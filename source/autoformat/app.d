@@ -149,7 +149,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
             "stdin", "file list separated by newline read from", &stdin_,
             "d|debug", "change loglevel to debug", &debug_,
-            "n|dry-run", "perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
+            "n|dry-run", "(ONLY supported by c, c++, java) perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
             "no-backup", "no backup file is created", &noBackup,
             "r|recursive", "autoformat recursive", &recursive,
             "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,

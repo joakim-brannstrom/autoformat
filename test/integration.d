@@ -73,13 +73,15 @@ int main(string[] args) {
 
 void testFormatOneFile(const string root) {
     auto ta = TestArea(root);
-    run("touch", "a.h");
-    run("touch", "a.hpp");
-    run("touch", "a.d");
+    createUnformattedCpp("a.h");
+    createUnformattedCpp("a.hpp");
+    createUnformattedD("a.d");
+    createUnformattedPython("a.py");
 
     assert(autoformat("a.h").status == 0);
     assert(autoformat("a.hpp").status == 0);
     assert(autoformat("a.d").status == 0);
+    assert(autoformat("a.py").status == 0);
 
     // should be resiliant against non-existing files.
     // do not error out on them.
@@ -88,9 +90,9 @@ void testFormatOneFile(const string root) {
 
 void testFormatFiles(const string root) {
     auto ta = TestArea(root);
-    createUnformattedFile("a.h");
-    createUnformattedFile("b.h");
-    createUnformattedFile("c.hpp");
+    createUnformattedCpp("a.h");
+    createUnformattedCpp("b.h");
+    createUnformattedCpp("c.hpp");
 
     assert(autoformat("a.h", "b.h", "c.hpp").status == 0);
 
@@ -145,47 +147,47 @@ void testInjectGitHook(const string root) {
 
 void testBackup(const string root) {
     auto ta = TestArea(root);
-    createUnformattedFile("a.h");
+    createUnformattedCpp("a.h");
     autoformat("a.h");
     assert(exists(buildPath(ta.root, "a.h.orig")));
 }
 
 void testNoBackup(const string root) {
     auto ta = TestArea(root);
-    createUnformattedFile("a.h");
+    createUnformattedCpp("a.h");
     autoformat("--no-backup", "a.h");
     assert(!exists(buildPath(ta.root, "a.h.orig")));
 }
 
 void testDryRun(const string root) {
     auto ta = TestArea(root);
-    createUnformattedFile("a.h");
+    createUnformattedCpp("a.h");
 
     autoformat("-n", "a.h");
 
     assert(!exists("a.h.orig"));
-    assert(std.file.readText("a.h") == unformattedFileContent);
+    assert(std.file.readText("a.h") == unformattedFileCpp);
 }
 
 void testGitHookAuto(const string root) {
     auto ta = TestArea(root);
     createRepo();
     autoformat("-i", ".");
-    createUnformattedFile("a.h");
+    createUnformattedCpp("a.h");
     git("config", "hooks.autoformat", "auto");
 
     git("add", "a.h");
     git("commit", "-am", "foo");
 
     assert(!exists("a.h.orig"));
-    assert(std.file.readText("a.h") != unformattedFileContent);
+    assert(std.file.readText("a.h") != unformattedFileCpp);
 }
 
 void testGitHookWarn(const string root) {
     auto ta = TestArea(root);
     createRepo();
     autoformat("-i", ".");
-    createUnformattedFile("a.h");
+    createUnformattedCpp("a.h");
     git("config", "hooks.autoformat", "warn");
 
     git("add", "a.h");
@@ -193,14 +195,14 @@ void testGitHookWarn(const string root) {
 
     assert(!matchFirst(res.output, ".*WARNING the following files need to be formatted").empty);
     assert(!exists("a.h.orig"));
-    assert(std.file.readText("a.h") == unformattedFileContent);
+    assert(std.file.readText("a.h") == unformattedFileCpp);
 }
 
 void testGitHookInterrupt(const string root) {
     auto ta = TestArea(root);
     createRepo();
     autoformat("-i", ".");
-    createUnformattedFile("a.h");
+    createUnformattedCpp("a.h");
     git("config", "hooks.autoformat", "interrupt");
 
     git("add", "a.h");
@@ -209,7 +211,7 @@ void testGitHookInterrupt(const string root) {
     assert(res.status != 0);
     assert(!matchFirst(res.output, ".*Commit interrupted because unformatted files found").empty);
     assert(!exists("a.h.orig"));
-    assert(std.file.readText("a.h") == unformattedFileContent);
+    assert(std.file.readText("a.h") == unformattedFileCpp);
 }
 
 void testRecursive(const string root) {
@@ -224,7 +226,7 @@ void testRecursive(const string root) {
         if (i == 55) {
             run("touch", buildPath(base_dir, "wrong_filetype.apa"));
         } else {
-            createUnformattedFile(buildPath(base_dir, "file_" ~ i.to!string ~ ".cpp"));
+            createUnformattedCpp(buildPath(base_dir, "file_" ~ i.to!string ~ ".cpp"));
         }
     }
 
@@ -247,7 +249,7 @@ void testRecursiveSkipDir(const string root) {
         } else if (i == 72) {
             run("touch", buildPath(base_dir, ".noautoformat"));
         } else {
-            createUnformattedFile(buildPath(base_dir, "file_" ~ i.to!string ~ ".cpp"));
+            createUnformattedCpp(buildPath(base_dir, "file_" ~ i.to!string ~ ".cpp"));
         }
     }
 
@@ -328,8 +330,17 @@ auto run(T...)(string cmd, T args_) {
     return r;
 }
 
-immutable unformattedFileContent = "   void f(int* x)\n{}\n";
+immutable unformattedFileCpp = "   void f(int* x)\n{}\n";
+void createUnformattedCpp(string dst) {
+    std.stdio.toFile(unformattedFileCpp, dst);
+}
 
-void createUnformattedFile(string dst) {
-    std.stdio.toFile(unformattedFileContent, dst);
+immutable unformattedFilePython = "def f(): return 1";
+void createUnformattedPython(string dst) {
+    std.stdio.toFile(unformattedFilePython, dst);
+}
+
+immutable unformattedFileD = "   void f(int* x)\n{}\n";
+void createUnformattedD(string dst) {
+    std.stdio.toFile(unformattedFileD, dst);
 }
