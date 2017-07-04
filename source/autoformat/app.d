@@ -22,9 +22,7 @@ import std.variant;
 
 import logger = std.experimental.logger;
 
-import autoformat.astyle;
-import autoformat.dfmt;
-import autoformat.filetype;
+import autoformat.formatter_tools;
 import autoformat.git;
 import autoformat.types;
 
@@ -331,19 +329,6 @@ int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run,
 
     return run(files, backup, dry_run, debug_mode);
 }
-
-alias FormatterFunc = FormatterResult function(AbsolutePath p,
-        Flag!"backup" backup, Flag!"dryRun" dry_run);
-alias FormatterCheckFunc = bool function(string p);
-alias Formatter = Tuple!(FormatterCheckFunc, FormatterFunc);
-
-// dfmt off
-enum formatters = [
-    Formatter(&isC_CppFiletype, &runAstyle),
-    Formatter(&isJavaFiletype, &runAstyle),
-    Formatter(&isDFiletype, &runDfmt)
-];
-// dfmt on
 
 FormatterStatus formatFile(T)(AbsolutePath p, Flag!"backup" backup,
         Flag!"dryRun" dry_run, T msgFunc) nothrow {
