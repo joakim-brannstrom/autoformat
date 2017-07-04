@@ -111,17 +111,17 @@ int main(string[] args) nothrow {
             return -1;
         }
     case Mode.installGitHook:
-        string abs_path_to_binary;
+        string path_to_binary;
         try {
-            abs_path_to_binary = std.file.readLink("/proc/self/exe");
+            path_to_binary = std.file.readLink("/proc/self/exe");
         }
         catch (Exception ex) {
             errorLog(
                     "Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0]);
-            abs_path_to_binary = args[0];
+            path_to_binary = args[0];
         }
         try {
-            return installGitHook(AbsolutePath(conf.installHook), AbsolutePath(abs_path_to_binary));
+            return installGitHook(AbsolutePath(conf.installHook), path_to_binary);
         }
         catch (Exception ex) {
             errorLog("Unable to install the git hook");
@@ -415,7 +415,12 @@ int setup(string[] args) {
     return 0;
 }
 
-int installGitHook(AbsolutePath install_to, AbsolutePath autoformat_bin) {
+/**
+ * Params:
+ *  install_to = path to a director containing a .git-directory
+ *  autoformat_bin = either an absolute or relative path to the autoformat binary
+ */
+int installGitHook(AbsolutePath install_to, string autoformat_bin) {
     static void usage() {
         if (gitConfigValue(gitConfigKey).among("auto", "warn", "interrupt")) {
             return;
