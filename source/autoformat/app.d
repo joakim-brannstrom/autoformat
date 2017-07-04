@@ -101,8 +101,10 @@ int main(string[] args) nothrow {
         if (conf.debug_) {
             logger.globalLogLevel = logger.LogLevel.all;
         } else {
+            import autoformat.logger;
+
             logger.globalLogLevel = logger.LogLevel.info;
-            logger.sharedLog = new MyCustomLogger(logger.LogLevel.info);
+            logger.sharedLog = new CustomLogger(logger.LogLevel.info);
         }
     }
     catch (Exception ex) {
@@ -127,8 +129,10 @@ int main(string[] args) nothrow {
         string abs_path_to_binary;
         try {
             abs_path_to_binary = std.file.readLink("/proc/self/exe");
-        } catch (Exception ex) {
-            errorLog("Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0]);
+        }
+        catch (Exception ex) {
+            errorLog(
+                    "Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0]);
             abs_path_to_binary = args[0];
         }
         try {
@@ -649,20 +653,4 @@ auto isOkToFormat(AbsolutePath p) nothrow {
     }
 
     return res;
-}
-
-class MyCustomLogger : logger.Logger {
-    import std.experimental.logger;
-
-    this(LogLevel lv) @safe {
-        super(lv);
-    }
-
-    override void writeLogMsg(ref LogEntry payload) @trusted {
-        if (payload.logLevel.among(LogLevel.info, LogLevel.trace)) {
-            stdout.writefln("%s: %s", payload.logLevel, payload.msg);
-        } else {
-            stderr.writefln("%s: %s", payload.logLevel, payload.msg);
-        }
-    }
 }
