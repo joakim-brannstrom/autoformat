@@ -11,6 +11,8 @@ This file contains the integration needed for using dfmt to format D code.
 */
 module autoformat.dfmt;
 
+import std.algorithm;
+import std.array;
 import std.exception;
 import std.file;
 import std.string : join;
@@ -21,9 +23,12 @@ import std.typecons : Flag;
 
 import autoformat.types;
 
+private immutable string[] dfmtConf = import("dfmt.conf").splitter("\n")
+    .filter!(a => a.length > 0).array();
+
 // TODO dry_run not supported.
 auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
-    auto opts = ["--inplace"];
+    string[] opts = dfmtConf.map!(a => a.idup).array();
 
     auto rval = FormatterResult(FormatterStatus.error);
 
