@@ -13,7 +13,7 @@ module autoformat.formatter_tools;
 
 import std.typecons : Flag, Tuple;
 
-public import autoformat.autopep8;
+public import autoformat.format_python;
 public import autoformat.astyle;
 public import autoformat.filetype : isOkToFormat;
 public import autoformat.dfmt;

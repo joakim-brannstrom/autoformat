@@ -9,7 +9,7 @@ one at http://mozilla.org/MPL/2.0/.
 
 autoformatter for python.
 */
-module autoformat.autopep8;
+module autoformat.format_python;
 
 import std.algorithm;
 import std.array;
