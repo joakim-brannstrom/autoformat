@@ -21,7 +21,7 @@ import std.typecons : Flag;
 
 import autoformat.types;
 
-// dry_run not supported.
+// TODO dry_run not supported.
 auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     auto opts = ["--inplace"];
 
@@ -37,7 +37,11 @@ auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
         auto res = execute(arg);
         logger.trace(res.output);
 
-        rval = FormatterStatus.ok;
+        if (dry_run) {
+            rval = FormatterStatus.unchanged;
+        } else {
+            rval = FormatterStatus.formattedOk;
+        }
     }
     catch (ErrnoException ex) {
         rval = FormatterResult(ex.msg);

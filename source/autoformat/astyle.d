@@ -20,7 +20,7 @@ import logger = std.experimental.logger;
 import autoformat.types;
 
 private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
-    .filter!(a => a.length > 0).array();
+    .filter!(a => a.length > 0).array() ~ ["-Q"];
 
 auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     string[] opts = astyleConf.map!(a => a.idup).array();
@@ -32,7 +32,7 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
     }
 
     if (dry_run) {
-        opts ~= ["--dry-run", "-Q"];
+        opts ~= ["--dry-run"];
     }
 
     auto rval = FormatterResult(FormatterStatus.error);
@@ -45,8 +45,10 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
 
         if (dry_run && res.output.length != 0) {
             rval = FormatterResult(FormatterStatus.wouldChange);
+        } else if (res.output.length != 0) {
+            rval = FormatterStatus.formattedOk;
         } else {
-            rval = FormatterStatus.ok;
+            rval = FormatterStatus.unchanged;
         }
     }
     catch (ErrnoException ex) {

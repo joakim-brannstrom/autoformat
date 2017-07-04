@@ -27,6 +27,17 @@ class CustomLogger : logger.Logger {
             out_ = stdout;
         }
 
-        out_.writefln("%s: %s", payload.logLevel, payload.msg);
+        string tabs = "\t";
+        switch (payload.logLevel) {
+        case LogLevel.trace:
+            tabs = "\t\t";
+            break;
+        case LogLevel.info:
+            tabs = "\t\t";
+            break;
+        default:
+        }
+
+        out_.writefln("%s: " ~ tabs ~ "%s", payload.logLevel, payload.msg);
     }
 }

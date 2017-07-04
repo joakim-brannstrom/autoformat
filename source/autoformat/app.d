@@ -251,7 +251,9 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
         Flag!"debugMode" debug_mode) {
     static FormatterStatus merge(FormatterStatus a, FormatterStatus b) {
         // when a is an error it can never change
-        if (b != FormatterStatus.ok) {
+        if (!b.among(FormatterStatus.formattedOk, FormatterStatus.unchanged)) {
+            return b;
+        } else if (b == FormatterStatus.formattedOk) {
             return b;
         } else {
             return a;
@@ -261,35 +263,36 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
     static FormatterStatus oneFile(T)(T f) nothrow {
         try {
             if (f.value.isDir || f.value.extension.length == 0) {
-                return FormatterStatus.ok;
+                return FormatterStatus.unchanged;
             }
         }
         catch (Exception ex) {
-            return FormatterStatus.ok;
+            return FormatterStatus.unchanged;
         }
 
         auto res = f.value.isOkToFormat;
         if (!res.ok) {
             try {
-                logger.errorf(" %s\t%s", f.index + 1, res.payload);
+                logger.warningf("%s %s", f.index + 1, res.payload);
             }
             catch (Exception ex) {
                 errorLog(ex.msg);
             }
-            return FormatterStatus.ok;
+            return FormatterStatus.unchanged;
         }
 
         try {
-            logger.infof("  %s\t%s", f.index + 1, f.value);
-            return formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
+            FormatterStatus rval = formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
                 logger.error(a);
             });
+            logger.infof(rval != FormatterStatus.unchanged, "%s formatted %s", f.index + 1, f.value);
+            return rval;
         }
         catch (Exception ex) {
             errorLog(ex.msg);
         }
 
-        return FormatterStatus.ok;
+        return FormatterStatus.unchanged;
     }
 
     static struct Entry(T) {
@@ -311,11 +314,15 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
     scope (exit)
         pool.stop;
     logger.info("Formatting files");
-    auto status = pool.reduce!merge(FormatterStatus.ok, std.algorithm.map!oneFile(files));
+    auto status = pool.reduce!merge(FormatterStatus.unchanged, std.algorithm.map!oneFile(files));
     pool.finish;
 
     logger.trace(status);
-    return status == FormatterStatus.ok ? 0 : -1;
+    if (dry_run) {
+        return status == FormatterStatus.unchanged ? 0 : -1;
+    } else {
+        return !status.among(FormatterStatus.unchanged, FormatterStatus.formattedOk);
+    }
 }
 
 int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run,

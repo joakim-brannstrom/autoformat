@@ -63,7 +63,7 @@ auto isOkToFormat(AbsolutePath p) nothrow {
         while (w != "/") {
             foreach (check; suppressAutoformatFilenames.map!(a => buildPath(w, a))) {
                 if (exists(check)) {
-                    return Result("autoformat blocked by " ~ check);
+                    return Result("autoformat of '" ~ p ~ "' blocked by: " ~ check);
                 }
             }
 

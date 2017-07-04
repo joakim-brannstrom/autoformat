@@ -52,8 +52,10 @@ struct AbsolutePath {
 enum FormatterStatus {
     /// failed autoformatting or some other kind of error
     error,
-    /// autoformatting done and it went ok
-    ok,
+    ///
+    unchanged,
+    /// formatted file with no errors
+    formattedOk,
     /// The file would change if it where autoformatted
     wouldChange,
 }
