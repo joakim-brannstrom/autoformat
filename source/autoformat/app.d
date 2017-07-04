@@ -43,14 +43,14 @@ enum FormatterStatus {
 }
 
 struct Config {
-    bool debug_;
-    bool dryRun;
+    Flag!"debugMode" debug_;
+    Flag!"dryRun" dryRun;
     bool help = false;
     string installHook;
-    bool noBackup;
-    bool recursive;
-    bool setup;
-    bool stdin;
+    Flag!"backup" backup;
+    Flag!"recursive" recursive;
+    Flag!"setup" setup;
+    Flag!"stdin" stdin;
 }
 
 void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
@@ -71,30 +71,7 @@ int main(string[] args) nothrow {
     Config conf;
     GetoptResult help_info;
 
-    try {
-        // dfmt off
-        help_info = getopt(args, std.getopt.config.keepEndOfOptions,
-            "stdin", "file list separated by newline read from", &conf.stdin,
-            "d|debug", "change loglevel to debug", &conf.debug_,
-            "n|dry-run", "perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &conf.dryRun,
-            "no-backup", "no backup file is created", &conf.noBackup,
-            "r|recursive", "autoformat recursive", &conf.recursive,
-            "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
-            "setup", "finalize installation of autoformatter by creating symlinks", &conf.setup,
-            );
-        // dfmt on
-        conf.help = help_info.helpWanted;
-    }
-    catch (std.getopt.GetOptException ex) {
-        errorLog(ex.msg);
-        conf.help = true;
-    }
-    catch (Exception ex) {
-        errorLog(ex.msg);
-        conf.help = true;
-    }
-
-    debugMode = conf.debug_;
+    parseArgs(args, conf, help_info);
 
     try {
         if (conf.debug_) {
@@ -198,6 +175,38 @@ int main(string[] args) nothrow {
     }
 
     return -1;
+}
+
+void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
+    bool debug_, dryRun, noBackup, recursive, setup, stdin_;
+    try {
+        // dfmt off
+        help_info = getopt(args, std.getopt.config.keepEndOfOptions,
+            "stdin", "file list separated by newline read from", &stdin_,
+            "d|debug", "change loglevel to debug", &debug_,
+            "n|dry-run", "perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
+            "no-backup", "no backup file is created", &noBackup,
+            "r|recursive", "autoformat recursive", &recursive,
+            "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
+            "setup", "finalize installation of autoformatter by creating symlinks", &setup,
+            );
+        // dfmt on
+        conf.debug_ = cast(typeof(Config.debug_)) debug_;
+        conf.dryRun = cast(typeof(Config.dryRun)) dryRun;
+        conf.backup = cast(typeof(Config.backup)) !noBackup;
+        conf.recursive = cast(typeof(Config.recursive)) recursive;
+        conf.setup = cast(typeof(Config.setup)) setup;
+        conf.stdin = cast(typeof(Config.stdin)) stdin_;
+        conf.help = help_info.helpWanted;
+    }
+    catch (std.getopt.GetOptException ex) {
+        errorLog(ex.msg);
+        conf.help = true;
+    }
+    catch (Exception ex) {
+        errorLog(ex.msg);
+        conf.help = true;
+    }
 }
 
 AbsolutePath[] filesFromStdin() {
