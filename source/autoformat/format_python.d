@@ -8,6 +8,7 @@ v.2.0. If a copy of the MPL was not distributed with this file, You can obtain
 one at http://mozilla.org/MPL/2.0/.
 
 autoformatter for python.
+Defaults to autopep8 because it works.
 */
 module autoformat.format_python;
 
@@ -28,7 +29,7 @@ private immutable string[] autopep8Conf = import("autopep8.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 
 // TODO dry_run not supported.
-auto runAutoPep8(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     string[] opts = autopep8Conf.map!(a => a.idup).array();
 
     auto rval = FormatterResult(FormatterStatus.error);

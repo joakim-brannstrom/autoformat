@@ -59,6 +59,7 @@ int main(string[] args) {
     testDryRun(root);
     testRecursive(root);
     testRecursiveSkipDir(root);
+    testSetup(root);
 
     foreach (p; dirEntries(root, SpanMode.shallow).filter!(a => a.name.baseName.startsWith("tmp_"))) {
         if (debugMode) {
@@ -257,6 +258,13 @@ void testRecursiveSkipDir(const string root) {
     assert(dirEntries(".", SpanMode.depth).filter!(a => a.baseName.endsWith(".orig")).count == 81);
 }
 
+void testSetup(const string root) {
+    auto ta = TestArea(root);
+    assert(autoformat("--setup").status == 0);
+    assert(exists(buildPath(autoformatBinary.dirName, "autoformat_src")));
+    assert(exists(buildPath(autoformatBinary.dirName, "autoformat_src.py")));
+}
+
 void createRepo() {
     git("init", ".");
     run("touch", ".gitignore");
@@ -335,7 +343,7 @@ void createUnformattedCpp(string dst) {
     std.stdio.toFile(unformattedFileCpp, dst);
 }
 
-immutable unformattedFilePython = "def f(): return 1";
+immutable unformattedFilePython = "def f(): \n return 1";
 void createUnformattedPython(string dst) {
     std.stdio.toFile(unformattedFilePython, dst);
 }

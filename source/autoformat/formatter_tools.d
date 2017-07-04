@@ -31,6 +31,6 @@ enum formatters = [
     Formatter(&isC_CppFiletype, &runAstyle),
     Formatter(&isJavaFiletype, &runAstyle),
     Formatter(&isDFiletype, &runDfmt),
-    Formatter(&isPythonFiletype, &runAutoPep8),
+    Formatter(&isPythonFiletype, &runPythonFormatter),
 ];
 // dfmt on
