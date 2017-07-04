@@ -22,25 +22,15 @@ import std.variant;
 
 import logger = std.experimental.logger;
 
+import autoformat.astyle;
+import autoformat.dfmt;
+import autoformat.filetype;
 import autoformat.git;
 import autoformat.types;
 
 immutable hookPreCommit = import("pre_commit");
 immutable hookPrepareCommitMsg = import("prepare_commit_msg");
 immutable gitConfigKey = "hooks.autoformat";
-immutable string[] astyleConf = import("astyle.conf").splitter("\n")
-    .filter!(a => a.length > 0).array();
-immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoformat_filenames.conf")
-    .splitter("\n").filter!(a => a.length > 0).array();
-
-enum FormatterStatus {
-    /// failed autoformatting or some other kind of error
-    error,
-    /// autoformatting done and it went ok
-    ok,
-    /// The file would change if it where autoformatted
-    wouldChange,
-}
 
 /// Active modes depending on the flags passed by the user.
 enum Mode {
@@ -342,7 +332,6 @@ int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run,
     return run(files, backup, dry_run, debug_mode);
 }
 
-alias FormatterResult = Algebraic!(string, FormatterStatus);
 alias FormatterFunc = FormatterResult function(AbsolutePath p,
         Flag!"backup" backup, Flag!"dryRun" dry_run);
 alias FormatterCheckFunc = bool function(string p);
@@ -583,124 +572,4 @@ void makeExecutable(string path) {
     import core.sys.posix.sys.stat;
 
     setAttributes(path, getAttributes(path) | S_IRWXU);
-}
-
-auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
-    string[] opts = astyleConf.map!(a => a.idup).array();
-
-    if (backup) {
-        opts ~= "--suffix=.orig";
-    } else {
-        opts ~= "--suffix=none";
-    }
-
-    if (dry_run) {
-        opts ~= ["--dry-run", "-Q"];
-    }
-
-    auto rval = FormatterResult(FormatterStatus.error);
-
-    try {
-        auto arg = ["astyle"] ~ opts ~ [cast(string) fname];
-        logger.trace(arg.join(" "));
-        auto res = execute(arg);
-        logger.trace(res.output);
-
-        if (dry_run && res.output.length != 0) {
-            rval = FormatterResult(FormatterStatus.wouldChange);
-        } else {
-            rval = FormatterStatus.ok;
-        }
-    }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
-    }
-
-    return rval;
-}
-
-// dry_run not supported.
-auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
-    auto opts = ["--inplace"];
-
-    auto rval = FormatterResult(FormatterStatus.error);
-
-    try {
-        if (backup) {
-            copy(fname, fname ~ ".orig");
-        }
-
-        auto arg = ["dfmt"] ~ opts ~ [cast(string) fname];
-        logger.trace(arg.join(" "));
-        auto res = execute(arg);
-        logger.trace(res.output);
-
-        rval = FormatterStatus.ok;
-    }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
-    }
-
-    return rval;
-}
-
-enum filetypeCheckers = [&isC_CppFiletype, &isDFiletype, &isJavaFiletype];
-
-bool isFiletypeSupported(AbsolutePath p) nothrow {
-    foreach (f; filetypeCheckers) {
-        if (f(p.extension)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool isC_CppFiletype(string p) nothrow {
-    return p.among(".c", ".cpp", ".cxx", ".h", ".hpp") != 0;
-}
-
-bool isDFiletype(string p) nothrow {
-    return p.among(".d", "di") != 0;
-}
-
-bool isJavaFiletype(string p) nothrow {
-    return p.among(".java") != 0;
-}
-
-auto isOkToFormat(AbsolutePath p) nothrow {
-    struct Result {
-        string payload;
-        bool ok;
-    }
-
-    auto res = Result(null, true);
-
-    if (!exists(p)) {
-        res = Result("file not found: " ~ p);
-    } else if (!isFiletypeSupported(p)) {
-        res = Result("filetype not supported: " ~ p);
-    } else {
-        string w = p;
-        while (w != "/") {
-            foreach (check; suppressAutoformatFilenames.map!(a => buildPath(w, a))) {
-                if (exists(check)) {
-                    return Result("autoformat blocked by " ~ check);
-                }
-            }
-
-            try {
-                auto a = AbsolutePath(w);
-                if (isGitRoot(a)) {
-                    break;
-                }
-            }
-            catch (Exception ex) {
-            }
-
-            w = dirName(w);
-        }
-    }
-
-    return res;
 }

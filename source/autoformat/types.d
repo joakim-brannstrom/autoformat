@@ -5,6 +5,8 @@ Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 */
 module autoformat.types;
 
+import std.variant : Algebraic;
+
 struct Path {
     string payload;
     alias payload this;
@@ -46,3 +48,14 @@ struct AbsolutePath {
         payload = p.payload;
     }
 }
+
+enum FormatterStatus {
+    /// failed autoformatting or some other kind of error
+    error,
+    /// autoformatting done and it went ok
+    ok,
+    /// The file would change if it where autoformatted
+    wouldChange,
+}
+
+alias FormatterResult = Algebraic!(string, FormatterStatus);
