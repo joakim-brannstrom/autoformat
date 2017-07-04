@@ -32,7 +32,6 @@ immutable string[] astyleConf = import("astyle.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoformat_filenames.conf")
     .splitter("\n").filter!(a => a.length > 0).array();
-bool debugMode;
 
 enum FormatterStatus {
     /// failed autoformatting or some other kind of error
@@ -148,8 +147,7 @@ int main(string[] args) nothrow {
     if (conf.stdin) {
         try {
             auto files = filesFromStdin;
-            return run(files, cast(Flag!"backup") !conf.noBackup,
-                    cast(Flag!"dryRun") conf.dryRun);
+            return run(files, conf.backup, conf.dryRun, conf.debug_);
         }
         catch (Exception ex) {
             errorLog("Unable to read a list of files separated by newline from stdin");
@@ -164,8 +162,7 @@ int main(string[] args) nothrow {
 
     if (conf.recursive) {
         try {
-            return runRecursive(AbsolutePath(args[1]),
-                    cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
+            return runRecursive(AbsolutePath(args[1]), conf.backup, conf.dryRun, conf.debug_);
         }
         catch (Exception ex) {
             errorLog("Error during recursive processing of files");
@@ -193,7 +190,7 @@ int main(string[] args) nothrow {
     }
 
     try {
-        return run(files, cast(Flag!"backup") !conf.noBackup, cast(Flag!"dryRun") conf.dryRun);
+        return run(files, conf.backup, conf.dryRun, conf.debug_);
     }
     catch (Exception ex) {
         errorLog("Failed to run");
@@ -216,7 +213,8 @@ AbsolutePath[] filesFromStdin() {
     return r.data;
 }
 
-int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
+        Flag!"debugMode" debug_mode) {
     static FormatterStatus merge(FormatterStatus a, FormatterStatus b) {
         // when a is an error it can never change
         if (b != FormatterStatus.ok) {
@@ -271,7 +269,7 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
         .enumerate.map!(a => Entry!(typeof(a))(backup, dry_run, a)).array();
 
     TaskPool pool;
-    if (debugMode) {
+    if (debug_mode) {
         pool = new TaskPool(1);
     } else {
         pool = new TaskPool;
@@ -286,7 +284,8 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run) {
     return status == FormatterStatus.ok ? 0 : -1;
 }
 
-int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run,
+        Flag!"debugMode" debug_mode) {
     if (!path.isDir) {
         logger.errorf("not a directory: %s", path);
         return FormatterStatus.error;
@@ -294,7 +293,7 @@ int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run)
 
     auto files = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
 
-    return run(files, backup, dry_run);
+    return run(files, backup, dry_run, debug_mode);
 }
 
 alias FormatterResult = Algebraic!(string, FormatterStatus);
