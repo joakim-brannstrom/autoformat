@@ -52,6 +52,8 @@ enum Mode {
     installGitHook,
     /// Process recursively
     recursive,
+    /// File list from stdin but processed as normal
+    normalFileListFromStdin,
     /// Normal mode which is one or more files from command line
     normal
 }
@@ -61,10 +63,9 @@ struct Config {
     Flag!"dryRun" dryRun;
     string installHook;
     Flag!"backup" backup;
-    Flag!"recursive" recursive;
-    Flag!"stdin" stdin;
 
     Mode mode;
+    string[] rawFiles;
 }
 
 void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
@@ -128,12 +129,16 @@ int main(string[] args) nothrow {
             return -1;
         }
     case Mode.recursive:
-        break;
-    case Mode.normal:
-        break;
-    }
-
-    if (conf.stdin) {
+        try {
+            return runRecursive(AbsolutePath(conf.rawFiles[0]), conf.backup,
+                    conf.dryRun, conf.debug_);
+        }
+        catch (Exception ex) {
+            errorLog("Error during recursive processing of files");
+            errorLog(ex.msg);
+            return -1;
+        }
+    case Mode.normalFileListFromStdin:
         try {
             auto files = filesFromStdin;
             return run(files, conf.backup, conf.dryRun, conf.debug_);
@@ -143,50 +148,9 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
-    } else if (args.length < 2) {
-        printHelp(args[0], help_info);
-        errorLog("Wrong number of arguments, probably missing the FILE(s)");
-        return -1;
+    case Mode.normal:
+        return normalMode(conf);
     }
-
-    if (conf.recursive) {
-        try {
-            return runRecursive(AbsolutePath(args[1]), conf.backup, conf.dryRun, conf.debug_);
-        }
-        catch (Exception ex) {
-            errorLog("Error during recursive processing of files");
-            errorLog(ex.msg);
-            return -1;
-        }
-    }
-
-    AbsolutePath[] files;
-    foreach (f; args[1 .. $]) {
-        try {
-            files ~= AbsolutePath(f);
-        }
-        catch (Exception ex) {
-            errorLog("Unable to transform to an absolute path: " ~ f);
-            errorLog(ex.msg);
-            return -1;
-        }
-    }
-
-    if (files.length == 0) {
-        printHelp(args[0], help_info);
-        errorLog("Wrong number of arguments, probably missing the FILE(s)");
-        return -1;
-    }
-
-    try {
-        return run(files, conf.backup, conf.dryRun, conf.debug_);
-    }
-    catch (Exception ex) {
-        errorLog("Failed to run");
-        errorLog(ex.msg);
-    }
-
-    return -1;
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
@@ -207,8 +171,6 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.debug_ = cast(typeof(Config.debug_)) debug_;
         conf.dryRun = cast(typeof(Config.dryRun)) dryRun;
         conf.backup = cast(typeof(Config.backup)) !noBackup;
-        conf.recursive = cast(typeof(Config.recursive)) recursive;
-        conf.stdin = cast(typeof(Config.stdin)) stdin_;
         help = help_info.helpWanted;
     }
     catch (std.getopt.GetOptException ex) {
@@ -228,6 +190,48 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.mode = Mode.setup;
     } else if (conf.installHook.length != 0) {
         conf.mode = Mode.installGitHook;
+    } else if (stdin_) {
+        conf.mode = Mode.normalFileListFromStdin;
+    }
+
+    if (conf.mode.among(Mode.helpAndExit, Mode.setup, Mode.installGitHook,
+            Mode.normalFileListFromStdin)) {
+        return;
+    }
+
+    if (args.length < 2) {
+        errorLog("Wrong number of arguments, probably missing the FILE(s)");
+        conf.mode = Mode.helpAndExit;
+        return;
+    } else {
+        conf.rawFiles = args[1 .. $];
+    }
+
+    if (recursive) {
+        conf.mode = Mode.recursive;
+    }
+}
+
+int normalMode(Config conf) nothrow {
+    AbsolutePath[] files;
+    foreach (f; conf.rawFiles) {
+        try {
+            files ~= AbsolutePath(f);
+        }
+        catch (Exception ex) {
+            errorLog("Unable to transform to an absolute path: " ~ f);
+            errorLog(ex.msg);
+            return -1;
+        }
+    }
+
+    try {
+        return run(files, conf.backup, conf.dryRun, conf.debug_);
+    }
+    catch (Exception ex) {
+        errorLog("Failed to run");
+        errorLog(ex.msg);
+        return -1;
     }
 }
 
