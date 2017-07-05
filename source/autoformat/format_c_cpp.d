@@ -6,50 +6,49 @@ Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 This Source Code Form is subject to the terms of the Mozilla Public License,
 v.2.0. If a copy of the MPL was not distributed with this file, You can obtain
 one at http://mozilla.org/MPL/2.0/.
-
-This file contains the integration needed for using dfmt to format D code.
 */
-module autoformat.dfmt;
+module autoformat.format_c_cpp;
 
 import std.algorithm;
 import std.array;
 import std.exception;
-import std.file;
-import std.string : join;
 import std.process;
-import logger = std.experimental.logger;
-
 import std.typecons : Flag;
+
+import logger = std.experimental.logger;
 
 import autoformat.types;
 
-private immutable string[] dfmtConf = import("dfmt.conf").splitter("\n")
-    .filter!(a => a.length > 0).array();
+private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
+    .filter!(a => a.length > 0).array() ~ ["-Q"];
 
-// TODO dry_run not supported.
-auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
-    if (dry_run) {
-        return FormatterResult(FormatterStatus.unchanged);
+auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+    string[] opts = astyleConf.map!(a => a.idup).array();
+
+    if (backup) {
+        opts ~= "--suffix=.orig";
+    } else {
+        opts ~= "--suffix=none";
     }
 
-    string[] opts = dfmtConf.map!(a => a.idup).array();
+    if (dry_run) {
+        opts ~= ["--dry-run"];
+    }
 
     auto rval = FormatterResult(FormatterStatus.error);
 
     try {
-        if (backup) {
-            copy(fname, fname ~ ".orig");
-        }
-
-        auto arg = ["dfmt"] ~ opts ~ [cast(string) fname];
+        auto arg = ["astyle"] ~ opts ~ [cast(string) fname];
         logger.trace(arg.join(" "));
         auto res = execute(arg);
         logger.trace(res.output);
 
-        if (dry_run) {
-            rval = FormatterStatus.unchanged;
-        } else {
+        if (dry_run && res.output.length != 0) {
+            rval = FormatterResult(FormatterStatus.wouldChange);
+        } else if (res.output.length != 0) {
             rval = FormatterStatus.formattedOk;
+        } else {
+            rval = FormatterStatus.unchanged;
         }
     }
     catch (ErrnoException ex) {

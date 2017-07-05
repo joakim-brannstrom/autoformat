@@ -13,10 +13,10 @@ module autoformat.formatter_tools;
 
 import std.typecons : Flag, Tuple;
 
+public import autoformat.format_c_cpp;
+public import autoformat.format_d;
 public import autoformat.format_python;
-public import autoformat.astyle;
 public import autoformat.filetype : isOkToFormat;
-public import autoformat.dfmt;
 
 import autoformat.filetype;
 import autoformat.types;
