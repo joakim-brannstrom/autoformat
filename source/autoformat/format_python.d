@@ -30,6 +30,10 @@ private immutable string[] autopep8Conf = import("autopep8.conf").splitter("\n")
 
 // TODO dry_run not supported.
 auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+    if (dry_run) {
+        return FormatterResult(FormatterStatus.unchanged);
+    }
+
     string[] opts = autopep8Conf.map!(a => a.idup).array();
 
     auto rval = FormatterResult(FormatterStatus.error);

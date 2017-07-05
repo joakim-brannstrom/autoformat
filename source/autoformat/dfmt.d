@@ -28,6 +28,10 @@ private immutable string[] dfmtConf = import("dfmt.conf").splitter("\n")
 
 // TODO dry_run not supported.
 auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+    if (dry_run) {
+        return FormatterResult(FormatterStatus.unchanged);
+    }
+
     string[] opts = dfmtConf.map!(a => a.idup).array();
 
     auto rval = FormatterResult(FormatterStatus.error);
