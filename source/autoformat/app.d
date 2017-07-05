@@ -160,6 +160,8 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.dryRun = cast(typeof(Config.dryRun)) dryRun;
         conf.backup = cast(typeof(Config.backup)) !noBackup;
         help = help_info.helpWanted;
+
+        logger.info(conf.debug_, "Debug mode activated");
     }
     catch (std.getopt.GetOptException ex) {
         errorLog(ex.msg);
@@ -304,7 +306,9 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
 
     TaskPool pool;
     if (debug_mode) {
-        pool = new TaskPool(1);
+        // zero because the main thread is also working which thus ensures that
+        // only one thread in the pool exist for work. No parallelism.
+        pool = new TaskPool(0);
     } else {
         pool = new TaskPool;
     }
@@ -355,15 +359,13 @@ FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" d
                 case FormatterStatus.formattedOk:
                     goto case;
                 case FormatterStatus.wouldChange:
-                    logger.info("formatted ", f);
+                    logger.info("formatted ", p);
                     break;
                 }
 
                 break;
             }
         }
-
-        logger.trace(status);
     }
     catch (Exception ex) {
         errorLog("Unable to format file: " ~ p);

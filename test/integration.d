@@ -33,6 +33,7 @@ int main(string[] args) {
     const string root = getcwd();
     autoformatBinary = autoformatBinary.absolutePath;
     logger.globalLogLevel = logger.LogLevel.all;
+    logger.info("Using this binary when testing: ", autoformatBinary);
 
     getopt(args, std.getopt.config.keepEndOfOptions, "d|debug",
             "debug and keep the test directories", &debugMode);
@@ -60,6 +61,7 @@ int main(string[] args) {
     testRecursive(root);
     testRecursiveSkipDir(root);
     testSetup(root);
+    testNotMultipleMessageWhenToolNotInstalled(root);
 
     foreach (p; dirEntries(root, SpanMode.shallow).filter!(a => a.name.baseName.startsWith("tmp_"))) {
         if (debugMode) {
@@ -265,6 +267,22 @@ void testSetup(const string root) {
     assert(exists(buildPath(autoformatBinary.dirName, "autoformat_src.py")));
 }
 
+void testNotMultipleMessageWhenToolNotInstalled(const string root) {
+    auto ta = TestArea(root);
+    createUnformattedPython("a.py");
+    createUnformattedPython("b.py");
+
+    // this test do not actually test what it should when autopep8 is NOT
+    // installed.
+    // "There shall be only one error message when the tool is not installed"
+    // (must run single threaded)
+    auto r = autoformat(debugMode ? "" : "-d", "a.py", "b.py");
+    logger.info(r.output);
+    assert(r.status == 0);
+    auto m = r.output.matchAll(regex("executable file not found", "i"));
+    assert(m.count <= 1);
+}
+
 void createRepo() {
     git("init", ".");
     run("touch", ".gitignore");
@@ -313,7 +331,7 @@ auto git(T...)(T args_) {
     return run("git", args_);
 }
 
-auto autoformat(T...)(T args_) {
+auto autoformat(T...)(auto ref T args_) {
     if (debugMode) {
         return run(autoformatBinary, "-d", args_);
     }
@@ -321,15 +339,16 @@ auto autoformat(T...)(T args_) {
     return run(autoformatBinary, args_);
 }
 
-auto run(T...)(string cmd, T args_) {
+auto run(T...)(string cmd, auto ref T args_) {
     string[] args;
     args ~= cmd;
 
     foreach (arg; args_) {
-        args ~= arg;
+        if (arg.length != 0)
+            args ~= arg;
     }
 
-    logger.trace(debugMode, "run: ", args.join(" "));
+    logger.info(debugMode, "run: ", args.join(" "));
     auto r = execute(args);
     if (r.status != 0) {
         logger.info(r.output);

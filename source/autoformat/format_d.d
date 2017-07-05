@@ -26,9 +26,13 @@ import autoformat.types;
 private immutable string[] dfmtConf = import("dfmt.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 
+// Thread local optimization that reduced the console spam when the program
+// isn't installed.
+bool installed = true;
+
 // TODO dry_run not supported.
 auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    if (dry_run) {
+    if (dry_run || !installed) {
         return FormatterResult(FormatterStatus.unchanged);
     }
 
@@ -47,6 +51,11 @@ auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) no
         logger.trace(res.output);
 
         rval = FormatterStatus.formattedOk;
+    }
+    catch (ProcessException ex) {
+        // dfmt isn't installed
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        installed = false;
     }
     catch (Exception ex) {
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);

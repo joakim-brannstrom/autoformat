@@ -29,9 +29,13 @@ import autoformat.types;
 private immutable string[] autopep8Conf = import("autopep8.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 
+// Thread local optimization that reduced the console spam when the program
+// isn't installed.
+bool installed = true;
+
 // TODO dry_run not supported.
 auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    if (dry_run) {
+    if (dry_run || !installed) {
         return FormatterResult(FormatterStatus.unchanged);
     }
 
@@ -50,6 +54,11 @@ auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" 
         logger.trace(res.output);
 
         rval = FormatterStatus.formattedOk;
+    }
+    catch (ProcessException ex) {
+        // autopep8 isn't installed
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        installed = false;
     }
     catch (Exception ex) {
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);

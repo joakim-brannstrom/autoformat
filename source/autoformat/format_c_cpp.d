@@ -22,8 +22,16 @@ import autoformat.types;
 private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
     .filter!(a => a.length > 0).array() ~ ["-Q"];
 
+// Thread local optimization that reduced the console spam when the program
+// isn't installed.
+bool installed = true;
+
 auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     string[] opts = astyleConf.map!(a => a.idup).array();
+
+    if (!installed) {
+        return FormatterResult(FormatterStatus.unchanged);
+    }
 
     if (backup) {
         opts ~= "--suffix=.orig";
@@ -51,7 +59,11 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
             rval = FormatterStatus.unchanged;
         }
     }
-
+    catch (ProcessException ex) {
+        // astyle isn't installed
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        installed = false;
+    }
     catch (Exception ex) {
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
