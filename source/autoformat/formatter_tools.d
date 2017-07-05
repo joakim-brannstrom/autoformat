@@ -13,16 +13,16 @@ module autoformat.formatter_tools;
 
 import std.typecons : Flag, Tuple;
 
+public import autoformat.format_c_cpp;
+public import autoformat.format_d;
 public import autoformat.format_python;
-public import autoformat.astyle;
 public import autoformat.filetype : isOkToFormat;
-public import autoformat.dfmt;
 
 import autoformat.filetype;
 import autoformat.types;
 
 alias FormatterFunc = FormatterResult function(AbsolutePath p,
-        Flag!"backup" backup, Flag!"dryRun" dry_run);
+        Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow;
 alias FormatterCheckFunc = bool function(string p);
 alias Formatter = Tuple!(FormatterCheckFunc, FormatterFunc);
 

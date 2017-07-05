@@ -7,7 +7,7 @@ This Source Code Form is subject to the terms of the Mozilla Public License,
 v.2.0. If a copy of the MPL was not distributed with this file, You can obtain
 one at http://mozilla.org/MPL/2.0/.
 */
-module autoformat.astyle;
+module autoformat.format_c_cpp;
 
 import std.algorithm;
 import std.array;
@@ -22,8 +22,16 @@ import autoformat.types;
 private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
     .filter!(a => a.length > 0).array() ~ ["-Q"];
 
-auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+// Thread local optimization that reduced the console spam when the program
+// isn't installed.
+bool installed = true;
+
+auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     string[] opts = astyleConf.map!(a => a.idup).array();
+
+    if (!installed) {
+        return FormatterResult(FormatterStatus.unchanged);
+    }
 
     if (backup) {
         opts ~= "--suffix=.orig";
@@ -51,8 +59,13 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
             rval = FormatterStatus.unchanged;
         }
     }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
+    catch (ProcessException ex) {
+        // astyle isn't installed
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        installed = false;
+    }
+    catch (Exception ex) {
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
 
     return rval;

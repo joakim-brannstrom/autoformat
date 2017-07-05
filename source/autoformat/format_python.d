@@ -9,6 +9,7 @@ one at http://mozilla.org/MPL/2.0/.
 
 autoformatter for python.
 Defaults to autopep8 because it works.
+I've tried to use reindent.py but it breaks on multiline literals so unusable.
 */
 module autoformat.format_python;
 
@@ -28,8 +29,16 @@ import autoformat.types;
 private immutable string[] autopep8Conf = import("autopep8.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 
+// Thread local optimization that reduced the console spam when the program
+// isn't installed.
+bool installed = true;
+
 // TODO dry_run not supported.
-auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
+    if (dry_run || !installed) {
+        return FormatterResult(FormatterStatus.unchanged);
+    }
+
     string[] opts = autopep8Conf.map!(a => a.idup).array();
 
     auto rval = FormatterResult(FormatterStatus.error);
@@ -44,14 +53,15 @@ auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" 
         auto res = execute(arg);
         logger.trace(res.output);
 
-        if (dry_run) {
-            rval = FormatterStatus.unchanged;
-        } else {
-            rval = FormatterStatus.formattedOk;
-        }
+        rval = FormatterStatus.formattedOk;
     }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
+    catch (ProcessException ex) {
+        // autopep8 isn't installed
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        installed = false;
+    }
+    catch (Exception ex) {
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
 
     return rval;
