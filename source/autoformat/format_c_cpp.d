@@ -22,7 +22,7 @@ import autoformat.types;
 private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
     .filter!(a => a.length > 0).array() ~ ["-Q"];
 
-auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     string[] opts = astyleConf.map!(a => a.idup).array();
 
     if (backup) {
@@ -51,8 +51,9 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
             rval = FormatterStatus.unchanged;
         }
     }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
+
+    catch (Exception ex) {
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
 
     return rval;

@@ -27,7 +27,7 @@ private immutable string[] dfmtConf = import("dfmt.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 
 // TODO dry_run not supported.
-auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     if (dry_run) {
         return FormatterResult(FormatterStatus.unchanged);
     }
@@ -46,14 +46,10 @@ auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
         auto res = execute(arg);
         logger.trace(res.output);
 
-        if (dry_run) {
-            rval = FormatterStatus.unchanged;
-        } else {
-            rval = FormatterStatus.formattedOk;
-        }
+        rval = FormatterStatus.formattedOk;
     }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
+    catch (Exception ex) {
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
 
     return rval;

@@ -282,10 +282,7 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
         }
 
         try {
-            FormatterStatus rval = formatFile(AbsolutePath(f.value), f.backup, f.dryRun, (string a) {
-                logger.error(a);
-            });
-            logger.infof(rval != FormatterStatus.unchanged, "%s formatted %s", f.index + 1, f.value);
+            FormatterStatus rval = formatFile(AbsolutePath(f.value), f.backup, f.dryRun);
             return rval;
         }
         catch (Exception ex) {
@@ -313,15 +310,14 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
     }
     scope (exit)
         pool.stop;
-    logger.info("Formatting files");
     auto status = pool.reduce!merge(FormatterStatus.unchanged, std.algorithm.map!oneFile(files));
     pool.finish;
 
     logger.trace(status);
     if (dry_run) {
-        return status == FormatterStatus.unchanged ? 0 : -1;
+        return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
     } else {
-        return !status.among(FormatterStatus.unchanged, FormatterStatus.formattedOk);
+        return status == FormatterStatus.error ? -1 : 0;
     }
 }
 
@@ -337,8 +333,7 @@ int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run,
     return run(files, backup, dry_run, debug_mode);
 }
 
-FormatterStatus formatFile(T)(AbsolutePath p, Flag!"backup" backup,
-        Flag!"dryRun" dry_run, T msgFunc) nothrow {
+FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     FormatterStatus status;
 
     try {
@@ -347,14 +342,24 @@ FormatterStatus formatFile(T)(AbsolutePath p, Flag!"backup" backup,
         foreach (f; formatters) {
             if (f[0](p.extension)) {
                 auto res = f[1](p, backup, dry_run);
-                if (res.peek!string !is null) {
-                    msgFunc(res.get!string());
-                    status = FormatterStatus.error;
+                status = res;
+
+                final switch (res.status) {
+                case FormatterStatus.error:
+                    goto case;
+                case FormatterStatus.failedWithUserMsg:
+                    logger.error(res.msg);
                     break;
-                } else if (res.peek!FormatterStatus !is null) {
-                    status = res.get!FormatterStatus;
+                case FormatterStatus.unchanged:
+                    break;
+                case FormatterStatus.formattedOk:
+                    goto case;
+                case FormatterStatus.wouldChange:
+                    logger.info("formatted ", f);
                     break;
                 }
+
+                break;
             }
         }
 

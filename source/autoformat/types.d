@@ -50,8 +50,10 @@ struct AbsolutePath {
 }
 
 enum FormatterStatus {
-    /// failed autoformatting or some other kind of error
+    /// failed to format or some other kind of error
     error,
+    /// error when formatting with an error msg
+    failedWithUserMsg,
     ///
     unchanged,
     /// formatted file with no errors
@@ -60,4 +62,9 @@ enum FormatterStatus {
     wouldChange,
 }
 
-alias FormatterResult = Algebraic!(string, FormatterStatus);
+struct FormatterResult {
+    FormatterStatus status;
+    string msg;
+
+    alias status this;
+}

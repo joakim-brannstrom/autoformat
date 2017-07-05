@@ -9,6 +9,7 @@ one at http://mozilla.org/MPL/2.0/.
 
 autoformatter for python.
 Defaults to autopep8 because it works.
+I've tried to use reindent.py but it breaks on multiline literals so unusable.
 */
 module autoformat.format_python;
 
@@ -29,7 +30,7 @@ private immutable string[] autopep8Conf = import("autopep8.conf").splitter("\n")
     .filter!(a => a.length > 0).array();
 
 // TODO dry_run not supported.
-auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) {
+auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     if (dry_run) {
         return FormatterResult(FormatterStatus.unchanged);
     }
@@ -48,14 +49,10 @@ auto runPythonFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" 
         auto res = execute(arg);
         logger.trace(res.output);
 
-        if (dry_run) {
-            rval = FormatterStatus.unchanged;
-        } else {
-            rval = FormatterStatus.formattedOk;
-        }
+        rval = FormatterStatus.formattedOk;
     }
-    catch (ErrnoException ex) {
-        rval = FormatterResult(ex.msg);
+    catch (Exception ex) {
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
 
     return rval;
