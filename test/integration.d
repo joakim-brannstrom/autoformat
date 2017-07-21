@@ -62,6 +62,7 @@ int main(string[] args) {
     testRecursiveSkipDir(root);
     testSetup(root);
     testNotMultipleMessageWhenToolNotInstalled(root);
+    testTrailingWhitespaceDetector(root);
 
     foreach (p; dirEntries(root, SpanMode.shallow).filter!(a => a.name.baseName.startsWith("tmp_"))) {
         if (debugMode) {
@@ -267,6 +268,22 @@ void testSetup(const string root) {
     assert(exists(buildPath(autoformatBinary.dirName, "autoformat_src.py")));
 }
 
+void testTrailingWhitespaceDetector(const string root) {
+    auto ta = TestArea(root);
+    createRepo;
+
+    // the tool shall report no error
+    assert(autoformat("--check-trailing-whitespace").status == 0);
+
+    // the tool shall report no error because the file is not staged
+    createTrailingWhitespaceFile("a.h");
+    assert(autoformat("--check-trailing-whitespace").status == 0);
+
+    // the tool shall report an error
+    git("add", "a.h");
+    assert(autoformat("--check-trailing-whitespace").status != 0);
+}
+
 void testNotMultipleMessageWhenToolNotInstalled(const string root) {
     auto ta = TestArea(root);
     createUnformattedPython("a.py");
@@ -370,4 +387,9 @@ void createUnformattedPython(string dst) {
 immutable unformattedFileD = "   void f(int* x)\n{}\n";
 void createUnformattedD(string dst) {
     std.stdio.toFile(unformattedFileD, dst);
+}
+
+immutable trailingWhitespaceFile = "void f();   \n";
+void createTrailingWhitespaceFile(string dst) {
+    std.stdio.toFile(trailingWhitespaceFile, dst);
 }

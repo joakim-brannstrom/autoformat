@@ -43,7 +43,9 @@ enum Mode {
     /// File list from stdin but processed as normal
     normalFileListFromStdin,
     /// Normal mode which is one or more files from command line
-    normal
+    normal,
+    /// Check staged files for trailing whitespace
+    checkGitTrailingWhitespace
 }
 
 struct Config {
@@ -138,11 +140,21 @@ int main(string[] args) nothrow {
         }
     case Mode.normal:
         return normalMode(conf);
+    case Mode.checkGitTrailingWhitespace:
+        import autoformat.tool_whitespace_check;
+
+        FormatterResult res = runWhitespaceCheck;
+        if (res.status == FormatterStatus.unchanged) {
+            return 0;
+        } else if (res.status == FormatterStatus.failedWithUserMsg) {
+            errorLog(res.msg);
+        }
+        return -1;
     }
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
-    bool debug_, dryRun, noBackup, recursive, setup, stdin_, help;
+    bool debug_, dryRun, noBackup, recursive, setup, stdin_, help, check_whitespace;
 
     try {
         // dfmt off
@@ -154,6 +166,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
             "r|recursive", "autoformat recursive", &recursive,
             "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
             "setup", "finalize installation of autoformatter by creating symlinks", &setup,
+            "check-trailing-whitespace", "check files for trailing whitespace", &check_whitespace,
             );
         // dfmt on
         conf.debug_ = cast(typeof(Config.debug_)) debug_;
@@ -182,10 +195,12 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.mode = Mode.installGitHook;
     } else if (stdin_) {
         conf.mode = Mode.normalFileListFromStdin;
+    } else if (check_whitespace) {
+        conf.mode = Mode.checkGitTrailingWhitespace;
     }
 
     if (conf.mode.among(Mode.helpAndExit, Mode.setup, Mode.installGitHook,
-            Mode.normalFileListFromStdin)) {
+            Mode.normalFileListFromStdin, Mode.checkGitTrailingWhitespace)) {
         return;
     }
 
@@ -421,6 +436,10 @@ int installGitHook(AbsolutePath install_to, string autoformat_bin) {
         writeln("   git config --global hooks.autoformat warn");
         writeln("   # Interrupt commit if a file doesn't follow code standard during commit");
         writeln("   git config --global hooks.autoformat interrupt");
+        writeln;
+        writeln("   # check for trailing whitespace in all staged files");
+        writeln("   # this can be used separately from the above autoformat");
+        writeln("   git config --global hooks.autoformat-check-whitespace");
     }
 
     static void createHook(AbsolutePath hook_p, string msg) {
