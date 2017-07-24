@@ -31,12 +31,17 @@ struct AbsolutePath {
         assert(payload.length == 0 || payload.isAbsolute);
     }
 
-    this(string p) {
-        auto p_expand = () @trusted{ return p.expandTilde; }();
-        payload = buildNormalizedPath(p_expand).absolutePath.Path;
+    this(string p) nothrow {
+        try {
+            auto p_expand = () @trusted{ return p.expandTilde; }();
+            payload = buildNormalizedPath(p_expand).absolutePath.Path;
+        }
+        catch (Exception ex) {
+            payload = null;
+        }
     }
 
-    this(AbsolutePath p) {
+    this(AbsolutePath p) nothrow {
         this = p;
     }
 
