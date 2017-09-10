@@ -376,20 +376,24 @@ auto run(T...)(string cmd, auto ref T args_) {
 
 immutable unformattedFileCpp = "   void f(int* x)\n{}\n";
 void createUnformattedCpp(string dst) {
-    std.stdio.toFile(unformattedFileCpp, dst);
+    auto f = File(dst, "w");
+    f.write(unformattedFileCpp);
 }
 
 immutable unformattedFilePython = "def f(): \n return 1";
 void createUnformattedPython(string dst) {
-    std.stdio.toFile(unformattedFilePython, dst);
+    auto f = File(dst, "w");
+    f.write(unformattedFilePython);
 }
 
 immutable unformattedFileD = "   void f(int* x)\n{}\n";
 void createUnformattedD(string dst) {
-    std.stdio.toFile(unformattedFileD, dst);
+    auto f = File(dst, "w");
+    f.write(unformattedFileD);
 }
 
 immutable trailingWhitespaceFile = "void f();   \n";
 void createTrailingWhitespaceFile(string dst) {
-    std.stdio.toFile(trailingWhitespaceFile, dst);
+    auto f = File(dst, "w");
+    f.write(trailingWhitespaceFile);
 }
