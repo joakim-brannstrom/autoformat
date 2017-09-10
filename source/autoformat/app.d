@@ -439,7 +439,11 @@ int installGitHook(AbsolutePath install_to, string autoformat_bin) {
         writeln;
         writeln("   # check for trailing whitespace in all staged files");
         writeln("   # this can be used separately from the above autoformat");
-        writeln("   git config --global hooks.autoformat-check-whitespace");
+        writeln("   git config --global hooks.autoformat-check-whitespace true");
+        writeln;
+        writeln("Recommendation:");
+        writeln("   git config --global hooks.autoformat auto");
+        writeln("   git config --global hooks.autoformat-check-whitespace true");
     }
 
     static void createHook(AbsolutePath hook_p, string msg) {
