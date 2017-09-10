@@ -46,6 +46,8 @@ int main(string[] args) {
     }
     chdir(root);
 
+    sanityCheck;
+
     testFormatOneFile(root);
     testFormatFiles(root);
     testFormatFilesInGitRepo(root);
@@ -73,6 +75,19 @@ int main(string[] args) {
     }
 
     return 0;
+}
+
+void sanityCheck() {
+    auto p = core.stdc.stdlib.getenv("PATH").fromStringz;
+    writeln("Path is: ", p);
+    writeln;
+
+    // check that the tools are installed
+    foreach (a; ["astyle", "dfmt"]) {
+        auto r = std.process.execute(["which", a]);
+        r.output.writeln;
+        assert(r.status == 0);
+    }
 }
 
 void testFormatOneFile(const string root) {
@@ -367,7 +382,9 @@ auto run(T...)(string cmd, auto ref T args_) {
 
     logger.info(debugMode, "run: ", args.join(" "));
     auto r = execute(args);
-    if (r.status != 0) {
+    if (debugMode) {
+        logger.info(r.output);
+    } else if (r.status != 0) {
         logger.info(r.output);
     }
 

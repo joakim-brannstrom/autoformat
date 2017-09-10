@@ -1,5 +1,7 @@
 # autoformat
 
+[![Build Status](https://travis-ci.org/joakim-brannstrom/autoformat.svg?branch=master)](https://travis-ci.org/joakim-brannstrom/autoformat)
+
 Wraps existing tools for formatting of source code in a handy package with integration with git.
 
 # Getting Started
