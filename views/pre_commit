@@ -5,6 +5,10 @@
 do_autoformat=$(git config hooks.autoformat)
 do_whitespace_check=$(git config --bool hooks.autoformat-check-whitespace)
 
+# Make it possible for the autoformat command to inform the user when it is
+# incompatible with the hook
+export AUTOFORMAT_HOOK_VERSION=2
+
 # Redirect output to stderr.
 exec 1>&2
 
@@ -33,14 +37,12 @@ fi
 
 if [[ "$do_autoformat" = "auto" ]]; then
     git diff --cached --name-only --diff-filter=AM $against | $AUTOFORMAT --no-backup --stdin
-    $AUTOFORMAT --check-trailing-whitespace || exit 1
 elif [[ "$do_autoformat" = "interrupt" ]]; then
     git diff --cached --name-only --diff-filter=AM $against | $AUTOFORMAT --no-backup --stdin --dry-run
     if [[ $? -ne 0 ]]; then
         echo "Commit interrupted because unformatted files found"
         exit 1
     fi
-    $AUTOFORMAT --check-trailing-whitespace || exit 1
 fi
 
 if [[ "$do_whitespace_check" = "yes" ]]; then

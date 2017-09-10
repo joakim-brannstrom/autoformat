@@ -7,6 +7,10 @@ GIT_TYPE="$2"
 # If you want to formatting set this variable to true
 do_autoformat=$(git config hooks.autoformat)
 
+# Make it possible for the autoformat command to inform the user when it is
+# incompatible with the hook
+export AUTOFORMAT_HOOK_VERSION=2
+
 function writer() {
     case "$GIT_TYPE" in
       message*)
