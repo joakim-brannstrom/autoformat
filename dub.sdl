@@ -5,3 +5,16 @@ copyright "Copyright © 2017, Joakim Brännström"
 license "BSL-1.0"
 
 targetPath "build"
+
+configuration "application" {
+    targetType "executable"
+    mainSourceFile "source/autoformat/app.d"
+}
+
+// redirect testing which is primarily integration testing
+configuration "integration_test" {
+    targetType "executable"
+
+    excludedSourceFiles "source/*/*d"
+    sourceFiles "test/redirect.d"
+}

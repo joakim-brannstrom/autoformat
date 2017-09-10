@@ -1,0 +1,15 @@
+name "test-autoformat"
+description "Test of autoformat"
+authors "Joakim Brännström"
+copyright "Copyright © 2017, Joakim Brännström"
+license "BSL-1.0"
+
+targetPath "build"
+
+configuration "unittest" {
+    targetType "executable"
+    targetName "test_runner"
+
+    sourceFiles "integration.d"
+    importPaths "."
+}
