@@ -32,22 +32,34 @@ immutable gitConfigKey = "hooks.autoformat";
 
 /// Active modes depending on the flags passed by the user.
 enum Mode {
+    /// Normal mode which is one or more files from command line
+    normal,
     /// Print help and exit
     helpAndExit,
     /// Create the symlinks to emulate the old autoformatter written in python
     setup,
     /// Install git hooks
     installGitHook,
-    /// Process recursively
-    recursive,
-    /// File list from stdin but processed as normal
-    normalFileListFromStdin,
-    /// Normal mode which is one or more files from command line
-    normal,
     /// Check staged files for trailing whitespace
     checkGitTrailingWhitespace,
+}
+
+/// The mode used to collect the files to process.
+enum FileMode {
+    /// Normal mode which is one or more files from command line
+    normal,
+    /// File list from stdin but processed as normal
+    normalFileListFromStdin,
+    /// Process recursively
+    recursive,
+}
+
+/// The procedure to use to process files.
+enum ToolMode {
+    /// Normal mode which is one or more files from command line
+    normal,
     /// Whitespace checker and fixup
-    detabTool
+    detabTool,
 }
 
 struct Config {
@@ -57,6 +69,8 @@ struct Config {
     Flag!"backup" backup;
 
     Mode mode;
+    ToolMode formatMode;
+    FileMode fileMode;
     string[] rawFiles;
 }
 
@@ -120,28 +134,6 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
-    case Mode.recursive:
-        try {
-            return runRecursive!(oneFileRespectKind)(AbsolutePath(conf.rawFiles[0]),
-                    conf.backup, conf.dryRun, conf.debug_);
-        }
-        catch (Exception ex) {
-            errorLog("Error during recursive processing of files");
-            errorLog(ex.msg);
-            return -1;
-        }
-    case Mode.normalFileListFromStdin:
-        try {
-            auto files = filesFromStdin;
-            return run!(oneFileRespectKind)(files, conf.backup, conf.dryRun, conf.debug_);
-        }
-        catch (Exception ex) {
-            errorLog("Unable to read a list of files separated by newline from stdin");
-            errorLog(ex.msg);
-            return -1;
-        }
-    case Mode.normal:
-        return normalMode(conf);
     case Mode.checkGitTrailingWhitespace:
         import autoformat.tool_whitespace_check;
 
@@ -152,7 +144,59 @@ int main(string[] args) nothrow {
             errorLog(res.msg);
         }
         return -1;
-    case Mode.detabTool:
+    case Mode.normal:
+        return fileMode(conf);
+    }
+}
+
+int fileMode(Config conf) nothrow {
+    AbsolutePath[] files;
+
+    final switch (conf.fileMode) {
+    case FileMode.recursive:
+        try {
+            auto tmp = recursiveFileList(AbsolutePath(conf.rawFiles[0]));
+            if (tmp.isNull)
+                return -1;
+            else
+                files = tmp.get;
+        }
+        catch (Exception ex) {
+            errorLog("Error during recursive processing of files");
+            errorLog(ex.msg);
+            return -1;
+        }
+        break;
+    case FileMode.normalFileListFromStdin:
+        try {
+            files = filesFromStdin;
+        }
+        catch (Exception ex) {
+            errorLog("Unable to read a list of files separated by newline from stdin");
+            errorLog(ex.msg);
+            return -1;
+        }
+        break;
+    case FileMode.normal:
+        files = conf.rawFiles.map!(a => AbsolutePath(a)).array();
+        break;
+    }
+
+    return formatMode(conf, files);
+}
+
+int formatMode(Config conf, AbsolutePath[] files) nothrow {
+    final switch (conf.formatMode) {
+    case ToolMode.normal:
+        try {
+            return run!oneFileRespectKind(files, conf.backup, conf.dryRun, conf.debug_);
+        }
+        catch (Exception ex) {
+            errorLog("Failed to run");
+            errorLog(ex.msg);
+            return -1;
+        }
+    case ToolMode.detabTool:
         import autoformat.tool_detab;
 
         return 0;
@@ -192,7 +236,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         help = true;
     }
 
-    conf.mode = Mode.normal;
+    // Main mode
 
     if (help) {
         conf.mode = Mode.helpAndExit;
@@ -200,53 +244,36 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.mode = Mode.setup;
     } else if (conf.installHook.length != 0) {
         conf.mode = Mode.installGitHook;
-    } else if (tool_detab) {
-        conf.mode = Mode.detabTool;
-    } else if (stdin_) {
-        conf.mode = Mode.normalFileListFromStdin;
     } else if (check_whitespace) {
         conf.mode = Mode.checkGitTrailingWhitespace;
     }
 
-    // tools not requiring any explicit files as input aka a second argument
-    if (conf.mode.among(Mode.helpAndExit, Mode.setup, Mode.installGitHook,
-            Mode.normalFileListFromStdin, Mode.checkGitTrailingWhitespace)) {
+    if (conf.mode != Mode.normal) {
+        // modes that do not require a specific FileMode
         return;
     }
 
-    if (args.length < 2) {
+    // File mode
+
+    if (recursive) {
+        conf.fileMode = FileMode.recursive;
+    } else if (stdin_) {
+        conf.fileMode = FileMode.normalFileListFromStdin;
+    }
+
+    if (args.length > 1)
+        conf.rawFiles = args[1 .. $];
+
+    if (conf.fileMode != FileMode.normalFileListFromStdin && args.length < 2) {
         errorLog("Wrong number of arguments, probably missing FILE(s)");
         conf.mode = Mode.helpAndExit;
         return;
-    } else {
-        conf.rawFiles = args[1 .. $];
     }
 
-    if (recursive) {
-        conf.mode = Mode.recursive;
-    }
-}
+    // Tool mode
 
-int normalMode(Config conf) nothrow {
-    AbsolutePath[] files;
-    foreach (f; conf.rawFiles) {
-        try {
-            files ~= AbsolutePath(f);
-        }
-        catch (Exception ex) {
-            errorLog("Unable to transform to an absolute path: " ~ f);
-            errorLog(ex.msg);
-            return -1;
-        }
-    }
-
-    try {
-        return run!(oneFileRespectKind)(files, conf.backup, conf.dryRun, conf.debug_);
-    }
-    catch (Exception ex) {
-        errorLog("Failed to run");
-        errorLog(ex.msg);
-        return -1;
+    if (tool_detab) {
+        conf.formatMode = ToolMode.detabTool;
     }
 }
 
@@ -352,16 +379,16 @@ int run(alias Func)(AbsolutePath[] files_, Flag!"backup" backup,
     }
 }
 
-int runRecursive(alias Func)(AbsolutePath path, Flag!"backup" backup,
-        Flag!"dryRun" dry_run, Flag!"debugMode" debug_mode) {
+Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
+    typeof(return) rval;
+
     if (!path.isDir) {
         logger.errorf("not a directory: %s", path);
-        return FormatterStatus.error;
+        return rval;
     }
 
-    auto files = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
-
-    return run!Func(files, backup, dry_run, debug_mode);
+    rval = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
+    return rval;
 }
 
 FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
