@@ -186,15 +186,28 @@ int fileMode(Config conf) nothrow {
 }
 
 int formatMode(Config conf, AbsolutePath[] files) nothrow {
+    import std.typecons : tuple;
+
+    const auto tconf = ToolConf(conf.dryRun, conf.backup);
+
     final switch (conf.formatMode) {
     case ToolMode.normal:
+        FormatterStatus status;
         try {
-            return run!oneFileRespectKind(files, conf.backup, conf.dryRun, conf.debug_);
+            status = parallelRun!(oneFileRespectKind, OneFileRespectKindEntry)(files,
+                    conf.debug_ ? PoolConf.debug_ : PoolConf.auto_, tconf);
+            logger.trace(status);
         }
         catch (Exception ex) {
             errorLog("Failed to run");
             errorLog(ex.msg);
             return -1;
+        }
+
+        if (conf.dryRun) {
+            return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
+        } else {
+            return status == FormatterStatus.error ? -1 : 0;
         }
     case ToolMode.detabTool:
         import autoformat.tool_detab;
@@ -302,12 +315,13 @@ AbsolutePath[] filesFromStdin() {
 }
 
 struct OneFileRespectKindEntry {
-    Flag!"backup" backup;
-    Flag!"dryRun" dryRun;
+    Tuple!(ulong, "index", AbsolutePath, "value") f;
+    alias f this;
 
-    Tuple!(ulong, "index", AbsolutePath, "value") payload;
-    alias payload this;
+    ToolConf conf;
 }
+
+alias ToolConf = Tuple!(Flag!"dryRun", "dryRun", Flag!"backup", "backup");
 
 FormatterStatus oneFileRespectKind(OneFileRespectKindEntry f) nothrow {
     try {
@@ -333,7 +347,7 @@ FormatterStatus oneFileRespectKind(OneFileRespectKindEntry f) nothrow {
     auto rval = FormatterStatus.unchanged;
 
     try {
-        rval = formatFile(AbsolutePath(f.value), f.backup, f.dryRun);
+        rval = formatFile(AbsolutePath(f.value), f.conf.backup, f.conf.dryRun);
     }
     catch (Exception ex) {
         errorLog(ex.msg);
@@ -342,8 +356,12 @@ FormatterStatus oneFileRespectKind(OneFileRespectKindEntry f) nothrow {
     return rval;
 }
 
-int run(alias Func)(AbsolutePath[] files_, Flag!"backup" backup,
-        Flag!"dryRun" dry_run, Flag!"debugMode" debug_mode) {
+enum PoolConf {
+    debug_,
+    auto_
+}
+
+FormatterStatus parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf poolc, ToolConf conf) {
     static FormatterStatus merge(FormatterStatus a, FormatterStatus b) {
         // when a is an error it can never change
         if (!b.among(FormatterStatus.formattedOk, FormatterStatus.unchanged)) {
@@ -355,28 +373,31 @@ int run(alias Func)(AbsolutePath[] files_, Flag!"backup" backup,
         }
     }
 
-    auto files = files_.filter!(a => a.length > 0)
-        .enumerate.map!(a => OneFileRespectKindEntry(backup, dry_run, a)).array();
+    // dfmt off
+    auto files = files_
+        .filter!(a => a.length > 0)
+        .enumerate.map!(a => ArgsT(a, conf))
+        .array();
+    // dfmt on
 
     TaskPool pool;
-    if (debug_mode) {
+    final switch (poolc) {
+    case PoolConf.debug_:
         // zero because the main thread is also working which thus ensures that
         // only one thread in the pool exist for work. No parallelism.
         pool = new TaskPool(0);
-    } else {
+        break;
+    case PoolConf.auto_:
         pool = new TaskPool;
+        break;
     }
+
     scope (exit)
         pool.stop;
     auto status = pool.reduce!merge(FormatterStatus.unchanged, std.algorithm.map!Func(files));
     pool.finish;
 
-    logger.trace(status);
-    if (dry_run) {
-        return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
-    } else {
-        return status == FormatterStatus.error ? -1 : 0;
-    }
+    return status;
 }
 
 Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
