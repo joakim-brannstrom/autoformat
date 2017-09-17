@@ -25,6 +25,7 @@ import logger = std.experimental.logger;
 import autoformat.formatter_tools;
 import autoformat.git;
 import autoformat.types;
+import autoformat.logger;
 
 immutable hookPreCommit = import("pre_commit");
 immutable hookPrepareCommitMsg = import("prepare_commit_msg");
@@ -32,20 +33,34 @@ immutable gitConfigKey = "hooks.autoformat";
 
 /// Active modes depending on the flags passed by the user.
 enum Mode {
+    /// Normal mode which is one or more files from command line
+    normal,
     /// Print help and exit
     helpAndExit,
     /// Create the symlinks to emulate the old autoformatter written in python
     setup,
     /// Install git hooks
     installGitHook,
-    /// Process recursively
-    recursive,
-    /// File list from stdin but processed as normal
-    normalFileListFromStdin,
+    /// Check staged files for trailing whitespace
+    checkGitTrailingWhitespace,
+}
+
+/// The mode used to collect the files to process.
+enum FileMode {
     /// Normal mode which is one or more files from command line
     normal,
-    /// Check staged files for trailing whitespace
-    checkGitTrailingWhitespace
+    /// File list from stdin but processed as normal
+    normalFileListFromStdin,
+    /// Process recursively
+    recursive,
+}
+
+/// The procedure to use to process files.
+enum ToolMode {
+    /// Normal mode which is one or more files from command line
+    normal,
+    /// Whitespace checker and fixup
+    detabTool,
 }
 
 struct Config {
@@ -54,23 +69,12 @@ struct Config {
     string installHook;
     Flag!"backup" backup;
 
-    Mode mode;
     string[] rawFiles;
-}
 
-void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
-        string prettyFuncName = __PRETTY_FUNCTION__, string moduleName = __MODULE__, T...)(
-        lazy string msg, lazy T args) nothrow {
-    try {
-        logger.logf!(line, file, funcName, prettyFuncName, moduleName)(lvl, msg, args);
-    }
-    catch (Exception ex) {
-    }
+    Mode mode;
+    FileMode fileMode;
+    ToolMode formatMode;
 }
-
-alias infoLog(T...) = internalLog!(logger.LogLevel.info, T);
-alias traceLog(T...) = internalLog!(logger.LogLevel.trace, T);
-alias errorLog(T...) = internalLog!(logger.LogLevel.error, T);
 
 int main(string[] args) nothrow {
     Config conf;
@@ -118,28 +122,6 @@ int main(string[] args) nothrow {
             errorLog(ex.msg);
             return -1;
         }
-    case Mode.recursive:
-        try {
-            return runRecursive(AbsolutePath(conf.rawFiles[0]), conf.backup,
-                    conf.dryRun, conf.debug_);
-        }
-        catch (Exception ex) {
-            errorLog("Error during recursive processing of files");
-            errorLog(ex.msg);
-            return -1;
-        }
-    case Mode.normalFileListFromStdin:
-        try {
-            auto files = filesFromStdin;
-            return run(files, conf.backup, conf.dryRun, conf.debug_);
-        }
-        catch (Exception ex) {
-            errorLog("Unable to read a list of files separated by newline from stdin");
-            errorLog(ex.msg);
-            return -1;
-        }
-    case Mode.normal:
-        return normalMode(conf);
     case Mode.checkGitTrailingWhitespace:
         import autoformat.tool_whitespace_check;
 
@@ -150,23 +132,118 @@ int main(string[] args) nothrow {
             errorLog(res.msg);
         }
         return -1;
+    case Mode.normal:
+        return fileMode(conf);
+    }
+}
+
+int fileMode(Config conf) nothrow {
+    AbsolutePath[] files;
+
+    final switch (conf.fileMode) {
+    case FileMode.recursive:
+        try {
+            auto tmp = recursiveFileList(AbsolutePath(conf.rawFiles[0]));
+            if (tmp.isNull)
+                return -1;
+            else
+                files = tmp.get;
+        }
+        catch (Exception ex) {
+            errorLog("Error during recursive processing of files");
+            errorLog(ex.msg);
+            return -1;
+        }
+        break;
+    case FileMode.normalFileListFromStdin:
+        try {
+            files = filesFromStdin;
+        }
+        catch (Exception ex) {
+            errorLog("Unable to read a list of files separated by newline from stdin");
+            errorLog(ex.msg);
+            return -1;
+        }
+        break;
+    case FileMode.normal:
+        files = conf.rawFiles.map!(a => AbsolutePath(a)).array();
+        break;
+    }
+
+    return formatMode(conf, files);
+}
+
+int formatMode(Config conf, AbsolutePath[] files) nothrow {
+    import std.conv : to;
+    import std.typecons : tuple;
+
+    const auto tconf = ToolConf(conf.dryRun, conf.backup);
+    const auto pconf = conf.debug_ ? PoolConf.debug_ : PoolConf.auto_;
+    FormatterStatus status;
+
+    final switch (conf.formatMode) {
+    case ToolMode.normal:
+        try {
+            status = parallelRun!(oneFileRespectKind, OneFileConf)(files, pconf, tconf);
+            logger.trace(status);
+        }
+        catch (Exception ex) {
+            errorLog("Failed to run");
+            errorLog(ex.msg);
+        }
+        break;
+
+    case ToolMode.detabTool:
+        import autoformat.tool_detab;
+
+        static auto runDetab(OneFileConf f) nothrow {
+            try {
+                if (f.value.isDir) {
+                    return FormatterStatus.unchanged;
+                }
+            }
+            catch (Exception ex) {
+                return FormatterStatus.unchanged;
+            }
+
+            static import autoformat.tool_detab;
+
+            return autoformat.tool_detab.runDetab(f.value, f.conf.backup, f.conf.dryRun);
+        }
+
+        try {
+            status = parallelRun!(runDetab, OneFileConf)(files, pconf, tconf);
+            logger.trace(status);
+        }
+        catch (Exception ex) {
+            errorLog("Failed to run");
+            errorLog(ex.msg);
+        }
+        break;
+    }
+
+    if (conf.dryRun) {
+        return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
+    } else {
+        return status == FormatterStatus.error ? -1 : 0;
     }
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
-    bool debug_, dryRun, noBackup, recursive, setup, stdin_, help, check_whitespace;
+    bool debug_, dryRun, noBackup, recursive, setup, stdin_, help, check_whitespace, tool_detab;
 
     try {
         // dfmt off
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
-            "stdin", "file list separated by newline read from", &stdin_,
+            "check-trailing-whitespace", "check files for trailing whitespace", &check_whitespace,
             "d|debug", "change loglevel to debug", &debug_,
+            "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
             "n|dry-run", "(ONLY supported by c, c++, java) perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
             "no-backup", "no backup file is created", &noBackup,
             "r|recursive", "autoformat recursive", &recursive,
-            "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
+            "stdin", "file list separated by newline read from", &stdin_,
             "setup", "finalize installation of autoformatter by creating symlinks", &setup,
-            "check-trailing-whitespace", "check files for trailing whitespace", &check_whitespace,
+            "tool-detab", "whitespace checker and fixup (all filetypes, respects .noautoformat)", &tool_detab,
             );
         // dfmt on
         conf.debug_ = cast(typeof(Config.debug_)) debug_;
@@ -185,7 +262,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         help = true;
     }
 
-    conf.mode = Mode.normal;
+    // Main mode
 
     if (help) {
         conf.mode = Mode.helpAndExit;
@@ -193,50 +270,36 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.mode = Mode.setup;
     } else if (conf.installHook.length != 0) {
         conf.mode = Mode.installGitHook;
-    } else if (stdin_) {
-        conf.mode = Mode.normalFileListFromStdin;
     } else if (check_whitespace) {
         conf.mode = Mode.checkGitTrailingWhitespace;
     }
 
-    if (conf.mode.among(Mode.helpAndExit, Mode.setup, Mode.installGitHook,
-            Mode.normalFileListFromStdin, Mode.checkGitTrailingWhitespace)) {
+    if (conf.mode != Mode.normal) {
+        // modes that do not require a specific FileMode
         return;
     }
 
-    if (args.length < 2) {
-        errorLog("Wrong number of arguments, probably missing the FILE(s)");
-        conf.mode = Mode.helpAndExit;
-        return;
-    } else {
-        conf.rawFiles = args[1 .. $];
-    }
+    // File mode
 
     if (recursive) {
-        conf.mode = Mode.recursive;
-    }
-}
-
-int normalMode(Config conf) nothrow {
-    AbsolutePath[] files;
-    foreach (f; conf.rawFiles) {
-        try {
-            files ~= AbsolutePath(f);
-        }
-        catch (Exception ex) {
-            errorLog("Unable to transform to an absolute path: " ~ f);
-            errorLog(ex.msg);
-            return -1;
-        }
+        conf.fileMode = FileMode.recursive;
+    } else if (stdin_) {
+        conf.fileMode = FileMode.normalFileListFromStdin;
     }
 
-    try {
-        return run(files, conf.backup, conf.dryRun, conf.debug_);
+    if (args.length > 1)
+        conf.rawFiles = args[1 .. $];
+
+    if (conf.fileMode != FileMode.normalFileListFromStdin && args.length < 2) {
+        errorLog("Wrong number of arguments, probably missing FILE(s)");
+        conf.mode = Mode.helpAndExit;
+        return;
     }
-    catch (Exception ex) {
-        errorLog("Failed to run");
-        errorLog(ex.msg);
-        return -1;
+
+    // Tool mode
+
+    if (tool_detab) {
+        conf.formatMode = ToolMode.detabTool;
     }
 }
 
@@ -264,8 +327,54 @@ AbsolutePath[] filesFromStdin() {
     return r.data;
 }
 
-int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
-        Flag!"debugMode" debug_mode) {
+struct OneFileConf {
+    Tuple!(ulong, "index", AbsolutePath, "value") f;
+    alias f this;
+
+    ToolConf conf;
+}
+
+alias ToolConf = Tuple!(Flag!"dryRun", "dryRun", Flag!"backup", "backup");
+
+FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
+    try {
+        if (f.value.isDir || f.value.extension.length == 0) {
+            return FormatterStatus.unchanged;
+        }
+    }
+    catch (Exception ex) {
+        return FormatterStatus.unchanged;
+    }
+
+    auto res = f.value.isOkToFormat;
+    if (!res.ok) {
+        try {
+            logger.warningf("%s %s", f.index + 1, res.payload);
+        }
+        catch (Exception ex) {
+            errorLog(ex.msg);
+        }
+        return FormatterStatus.unchanged;
+    }
+
+    auto rval = FormatterStatus.unchanged;
+
+    try {
+        rval = formatFile(AbsolutePath(f.value), f.conf.backup, f.conf.dryRun);
+    }
+    catch (Exception ex) {
+        errorLog(ex.msg);
+    }
+
+    return rval;
+}
+
+enum PoolConf {
+    debug_,
+    auto_
+}
+
+FormatterStatus parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf poolc, ToolConf conf) {
     static FormatterStatus merge(FormatterStatus a, FormatterStatus b) {
         // when a is an error it can never change
         if (!b.among(FormatterStatus.formattedOk, FormatterStatus.unchanged)) {
@@ -277,79 +386,43 @@ int run(AbsolutePath[] files_, Flag!"backup" backup, Flag!"dryRun" dry_run,
         }
     }
 
-    static FormatterStatus oneFile(T)(T f) nothrow {
-        try {
-            if (f.value.isDir || f.value.extension.length == 0) {
-                return FormatterStatus.unchanged;
-            }
-        }
-        catch (Exception ex) {
-            return FormatterStatus.unchanged;
-        }
-
-        auto res = f.value.isOkToFormat;
-        if (!res.ok) {
-            try {
-                logger.warningf("%s %s", f.index + 1, res.payload);
-            }
-            catch (Exception ex) {
-                errorLog(ex.msg);
-            }
-            return FormatterStatus.unchanged;
-        }
-
-        try {
-            FormatterStatus rval = formatFile(AbsolutePath(f.value), f.backup, f.dryRun);
-            return rval;
-        }
-        catch (Exception ex) {
-            errorLog(ex.msg);
-        }
-
-        return FormatterStatus.unchanged;
-    }
-
-    static struct Entry(T) {
-        Flag!"backup" backup;
-        Flag!"dryRun" dryRun;
-        T payload;
-        alias payload this;
-    }
-
-    auto files = files_.filter!(a => a.length > 0)
-        .enumerate.map!(a => Entry!(typeof(a))(backup, dry_run, a)).array();
+    // dfmt off
+    auto files = files_
+        .filter!(a => a.length > 0)
+        .enumerate.map!(a => ArgsT(a, conf))
+        .array();
+    // dfmt on
 
     TaskPool pool;
-    if (debug_mode) {
+    final switch (poolc) {
+    case PoolConf.debug_:
         // zero because the main thread is also working which thus ensures that
         // only one thread in the pool exist for work. No parallelism.
         pool = new TaskPool(0);
-    } else {
+        break;
+    case PoolConf.auto_:
         pool = new TaskPool;
+        break;
     }
+
     scope (exit)
         pool.stop;
-    auto status = pool.reduce!merge(FormatterStatus.unchanged, std.algorithm.map!oneFile(files));
+    auto status = pool.reduce!merge(FormatterStatus.unchanged, std.algorithm.map!Func(files));
     pool.finish;
 
-    logger.trace(status);
-    if (dry_run) {
-        return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
-    } else {
-        return status == FormatterStatus.error ? -1 : 0;
-    }
+    return status;
 }
 
-int runRecursive(AbsolutePath path, Flag!"backup" backup, Flag!"dryRun" dry_run,
-        Flag!"debugMode" debug_mode) {
+Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
+    typeof(return) rval;
+
     if (!path.isDir) {
         logger.errorf("not a directory: %s", path);
-        return FormatterStatus.error;
+        return rval;
     }
 
-    auto files = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
-
-    return run(files, backup, dry_run, debug_mode);
+    rval = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
+    return rval;
 }
 
 FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {

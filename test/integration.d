@@ -65,6 +65,7 @@ int main(string[] args) {
     testSetup(root);
     testNotMultipleMessageWhenToolNotInstalled(root);
     testTrailingWhitespaceDetector(root);
+    testDetab(root);
 
     foreach (p; dirEntries(root, SpanMode.shallow).filter!(a => a.name.baseName.startsWith("tmp_"))) {
         if (debugMode) {
@@ -313,6 +314,20 @@ void testNotMultipleMessageWhenToolNotInstalled(const string root) {
     assert(r.status == 0);
     auto m = r.output.matchAll(regex("executable file not found", "i"));
     assert(m.count <= 1);
+}
+
+void testDetab(const string root) {
+    auto ta = TestArea(root);
+    createTrailingWhitespaceFile("a.txt");
+
+    auto r = autoformat(debugMode ? "" : "-d", "--tool-detab", "a.txt");
+    logger.info(r.output);
+    assert(r.status == 0);
+
+    assert(exists("a.txt.orig"));
+    auto content = std.file.readText("a.txt");
+    logger.info(content);
+    assert(content == "void f();\n");
 }
 
 void createRepo() {
