@@ -19,7 +19,7 @@ int main(string[] args) {
     writeln("===============================");
     writeln("Redirecting testing to: ", buildPath(getcwd, "test"));
 
-    // make sure the grammar is pristine
+    // make sure the build is pristine
     if (spawnProcess(["dub", "build", "-c", "application"]).wait != 0) {
         return -1;
     }

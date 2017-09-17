@@ -323,6 +323,11 @@ void testDetab(const string root) {
     auto r = autoformat(debugMode ? "" : "-d", "--tool-detab", "a.txt");
     logger.info(r.output);
     assert(r.status == 0);
+
+    assert(exists("a.txt.orig"));
+    auto content = std.file.readText("a.txt");
+    logger.info(content);
+    assert(content == "void f();\n");
 }
 
 void createRepo() {

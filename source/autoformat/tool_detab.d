@@ -15,6 +15,7 @@ import std.typecons : Flag;
 import logger = std.experimental.logger;
 
 import autoformat.types;
+import autoformat.logger;
 
 auto runDetab(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     auto rval = FormatterResult(FormatterStatus.error);
@@ -30,14 +31,14 @@ auto runDetab(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) n
 
     char[] output;
     try {
-        filter(input);
+        output = filter(input);
     }
     catch (Exception e) {
         rval = FormatterResult(FormatterStatus.wouldChange);
         return rval;
     }
 
-    if (input != output) {
+    if (input == output) {
         rval = FormatterStatus.unchanged;
         return rval;
     }
@@ -53,6 +54,7 @@ auto runDetab(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) n
         }
 
         std.file.write(fname, output);
+        rval = FormatterResult(FormatterStatus.formattedOk);
     }
     catch (Exception ex) {
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);

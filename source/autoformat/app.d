@@ -25,6 +25,7 @@ import logger = std.experimental.logger;
 import autoformat.formatter_tools;
 import autoformat.git;
 import autoformat.types;
+import autoformat.logger;
 
 immutable hookPreCommit = import("pre_commit");
 immutable hookPrepareCommitMsg = import("prepare_commit_msg");
@@ -68,25 +69,12 @@ struct Config {
     string installHook;
     Flag!"backup" backup;
 
-    Mode mode;
-    ToolMode formatMode;
-    FileMode fileMode;
     string[] rawFiles;
-}
 
-void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
-        string prettyFuncName = __PRETTY_FUNCTION__, string moduleName = __MODULE__, T...)(
-        lazy string msg, lazy T args) nothrow {
-    try {
-        logger.logf!(line, file, funcName, prettyFuncName, moduleName)(lvl, msg, args);
-    }
-    catch (Exception ex) {
-    }
+    Mode mode;
+    FileMode fileMode;
+    ToolMode formatMode;
 }
-
-alias infoLog(T...) = internalLog!(logger.LogLevel.info, T);
-alias traceLog(T...) = internalLog!(logger.LogLevel.trace, T);
-alias errorLog(T...) = internalLog!(logger.LogLevel.error, T);
 
 int main(string[] args) nothrow {
     Config conf;
@@ -186,33 +174,58 @@ int fileMode(Config conf) nothrow {
 }
 
 int formatMode(Config conf, AbsolutePath[] files) nothrow {
+    import std.conv : to;
     import std.typecons : tuple;
 
     const auto tconf = ToolConf(conf.dryRun, conf.backup);
+    const auto pconf = conf.debug_ ? PoolConf.debug_ : PoolConf.auto_;
+    FormatterStatus status;
 
     final switch (conf.formatMode) {
     case ToolMode.normal:
-        FormatterStatus status;
         try {
-            status = parallelRun!(oneFileRespectKind, OneFileRespectKindEntry)(files,
-                    conf.debug_ ? PoolConf.debug_ : PoolConf.auto_, tconf);
+            status = parallelRun!(oneFileRespectKind, OneFileConf)(files, pconf, tconf);
             logger.trace(status);
         }
         catch (Exception ex) {
             errorLog("Failed to run");
             errorLog(ex.msg);
-            return -1;
         }
+        break;
 
-        if (conf.dryRun) {
-            return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
-        } else {
-            return status == FormatterStatus.error ? -1 : 0;
-        }
     case ToolMode.detabTool:
         import autoformat.tool_detab;
 
-        return 0;
+        static auto runDetab(OneFileConf f) nothrow {
+            try {
+                if (f.value.isDir) {
+                    return FormatterStatus.unchanged;
+                }
+            }
+            catch (Exception ex) {
+                return FormatterStatus.unchanged;
+            }
+
+            static import autoformat.tool_detab;
+
+            return autoformat.tool_detab.runDetab(f.value, f.conf.backup, f.conf.dryRun);
+        }
+
+        try {
+            status = parallelRun!(runDetab, OneFileConf)(files, pconf, tconf);
+            logger.trace(status);
+        }
+        catch (Exception ex) {
+            errorLog("Failed to run");
+            errorLog(ex.msg);
+        }
+        break;
+    }
+
+    if (conf.dryRun) {
+        return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
+    } else {
+        return status == FormatterStatus.error ? -1 : 0;
     }
 }
 
@@ -314,7 +327,7 @@ AbsolutePath[] filesFromStdin() {
     return r.data;
 }
 
-struct OneFileRespectKindEntry {
+struct OneFileConf {
     Tuple!(ulong, "index", AbsolutePath, "value") f;
     alias f this;
 
@@ -323,7 +336,7 @@ struct OneFileRespectKindEntry {
 
 alias ToolConf = Tuple!(Flag!"dryRun", "dryRun", Flag!"backup", "backup");
 
-FormatterStatus oneFileRespectKind(OneFileRespectKindEntry f) nothrow {
+FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
     try {
         if (f.value.isDir || f.value.extension.length == 0) {
             return FormatterStatus.unchanged;
