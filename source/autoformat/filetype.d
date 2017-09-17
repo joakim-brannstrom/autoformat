@@ -35,19 +35,23 @@ bool isFiletypeSupported(AbsolutePath p) nothrow {
 }
 
 bool isC_CppFiletype(string p) nothrow {
-    return p.among(".c", ".cpp", ".cxx", ".h", ".hpp") != 0;
+    enum types = import("filetype_c_cpp.txt").splitter.array();
+    return types.canFind(p) != 0;
 }
 
 bool isDFiletype(string p) nothrow {
-    return p.among(".d", "di") != 0;
+    enum types = import("filetype_d.txt").splitter.array();
+    return types.canFind(p) != 0;
 }
 
 bool isJavaFiletype(string p) nothrow {
-    return p.among(".java") != 0;
+    enum types = import("filetype_java.txt").splitter.array();
+    return types.canFind(p) != 0;
 }
 
 bool isPythonFiletype(string p) nothrow {
-    return p.among(".py") != 0;
+    enum types = import("filetype_python.txt").splitter.array();
+    return types.canFind(p) != 0;
 }
 
 auto isOkToFormat(AbsolutePath p) nothrow {
