@@ -105,9 +105,11 @@ int main(string[] args) nothrow {
             return -1;
         }
     case Mode.installGitHook:
+        import std.file : thisExePath;
+
         string path_to_binary;
         try {
-            path_to_binary = std.file.readLink("/proc/self/exe");
+            path_to_binary = thisExePath;
         }
         catch (Exception ex) {
             errorLog(
