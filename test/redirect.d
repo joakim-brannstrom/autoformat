@@ -30,6 +30,5 @@ int main(string[] args) {
         return -1;
     }
 
-    auto pid = spawnProcess(["dub", "test", "--", "-d"]);
-    return pid.wait != 0;
+    return spawnProcess(["dub", "test", "--"]).wait != 0;
 }

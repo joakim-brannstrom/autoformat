@@ -16,5 +16,5 @@ configuration "integration_test" {
     targetType "executable"
 
     excludedSourceFiles "source/*/*d"
-    sourceFiles "test/redirect.d"
+    mainSourceFile "test/redirect.d"
 }

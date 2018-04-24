@@ -20,14 +20,33 @@ import logger = std.experimental.logger;
 import autoformat.types;
 
 private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
-    .filter!(a => a.length > 0).array() ~ ["-Q"];
+    .filter!(a => a.length > 0).array ~ ["-Q"];
+
+private immutable string[] clangFormatConf = import("clang_format.conf").splitter(
+        "\n").filter!(a => a.length != 0).array;
 
 // Thread local optimization that reduced the console spam when the program
 // isn't installed.
 bool installed = true;
 
+auto runClangFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
+    string tool = () nothrow{
+        try {
+            return environment.get("AUTOFORMAT_CLANG_TOOL", "clang-format");
+        }
+        catch (Exception e) {
+        }
+        return "astyle";
+    }();
+
+    if (tool == "astyle")
+        return runAstyle(fname, backup, dry_run);
+    else
+        return runClangFormat(fname, backup, dry_run);
+}
+
 auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    string[] opts = astyleConf.map!(a => a.idup).array();
+    string[] opts = astyleConf.map!(a => a.idup).array;
 
     if (!installed) {
         return FormatterResult(FormatterStatus.unchanged);
@@ -47,9 +66,7 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
 
     try {
         auto arg = ["astyle"] ~ opts ~ [cast(string) fname];
-        logger.trace(arg.join(" "));
-        auto res = execute(arg);
-        logger.trace(res.output);
+        auto res = loggedExecute(arg);
 
         if (dry_run && res.output.length != 0) {
             rval = FormatterResult(FormatterStatus.wouldChange);
@@ -69,4 +86,53 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
     }
 
     return rval;
+}
+
+auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
+    import std.file : copy;
+
+    string[] opts = clangFormatConf.map!(a => a.idup).array;
+
+    if (!installed) {
+        return FormatterResult(FormatterStatus.unchanged);
+    }
+
+    if (dry_run)
+        opts ~= "-output-replacements-xml";
+    else
+        opts ~= "-i";
+
+    auto arg = ["clang-format"] ~ opts ~ [cast(string) fname];
+
+    auto rval = FormatterResult(FormatterStatus.error);
+
+    try {
+        if (!dry_run && backup)
+            copy(fname, fname ~ ".orig");
+
+        auto res = loggedExecute(arg);
+
+        if (dry_run && res.output.splitter("\n").count > 3) {
+            rval = FormatterResult(FormatterStatus.wouldChange);
+        } else {
+            rval = FormatterStatus.formattedOk;
+        }
+    }
+    catch (ProcessException e) {
+        // clang-format isn't installed
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, e.msg);
+        installed = false;
+    }
+    catch (Exception e) {
+        rval = FormatterResult(FormatterStatus.failedWithUserMsg, e.msg);
+    }
+
+    return rval;
+}
+
+auto loggedExecute(string[] arg) {
+    logger.trace(arg.join(" "));
+    auto res = execute(arg);
+    logger.trace(res.output);
+    return res;
 }

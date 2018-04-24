@@ -28,7 +28,7 @@ alias Formatter = Tuple!(FormatterCheckFunc, FormatterFunc);
 
 // dfmt off
 enum formatters = [
-    Formatter(&isC_CppFiletype, &runAstyle),
+    Formatter(&isC_CppFiletype, &runClangFormatter),
     Formatter(&isJavaFiletype, &runAstyle),
     Formatter(&isDFiletype, &runDfmt),
     Formatter(&isPythonFiletype, &runPythonFormatter),

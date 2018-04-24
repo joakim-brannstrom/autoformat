@@ -48,22 +48,33 @@ int main(string[] args) {
 
     sanityCheck;
 
-    testFormatOneFile(root);
-    testFormatFiles(root);
-    testFormatFilesInGitRepo(root);
-    testFormatUnknownFiletype(root);
-    testInstallGitHook(root);
-    testInjectGitHook(root);
-    testGitHookAuto(root);
-    testGitHookWarn(root);
-    testGitHookInterrupt(root);
-    testBackup(root);
-    testNoBackup(root);
-    testDryRun(root);
-    testRecursive(root);
-    testRecursiveSkipDir(root);
-    testSetup(root);
-    testNotMultipleMessageWhenToolNotInstalled(root);
+    foreach (t; ["clang-format", "astyle"]) {
+        writeln("Tool ", t);
+
+        import core.sys.posix.stdlib : putenv, unsetenv;
+
+        const env_key = "AUTOFORMAT_CLANG_TOOL";
+        const env_var = (env_key ~ "=" ~ t).toStringz;
+        putenv(cast(char*) env_var);
+
+        testFormatOneFile(root);
+        testFormatFiles(root);
+        testFormatFilesInGitRepo(root);
+        testFormatUnknownFiletype(root);
+        testInstallGitHook(root);
+        testInjectGitHook(root);
+        testGitHookAuto(root);
+        testGitHookWarn(root);
+        testGitHookInterrupt(root);
+        testBackup(root);
+        testNoBackup(root);
+        testDryRun(root);
+        testRecursive(root);
+        testRecursiveSkipDir(root);
+        testSetup(root);
+        testNotMultipleMessageWhenToolNotInstalled(root);
+    }
+
     testTrailingWhitespaceDetector(root);
     testDetab(root);
 
@@ -79,14 +90,14 @@ int main(string[] args) {
 }
 
 void sanityCheck() {
-    auto p = core.stdc.stdlib.getenv("PATH").fromStringz;
+    auto p = environment.get("PATH");
     writeln("Path is: ", p);
     writeln;
 
     // check that the tools are installed
-    foreach (a; ["astyle", "dfmt"]) {
+    foreach (a; ["astyle", "clang-format", "dfmt"]) {
         auto r = std.process.execute(["which", a]);
-        r.output.writeln;
+        r.output.write;
         assert(r.status == 0);
     }
 }
