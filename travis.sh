@@ -10,5 +10,6 @@ echo "Test information"
 echo $PATH
 which dfmt
 which astyle
+which clang-format
 
 dub test && dub run -c integration_test
