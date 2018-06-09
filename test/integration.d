@@ -59,6 +59,7 @@ int main(string[] args) {
 
         testFormatOneFile(root);
         testFormatFiles(root);
+        testLongLineFormatting(root);
         testFormatFilesInGitRepo(root);
         testFormatUnknownFiletype(root);
         testInstallGitHook(root);
@@ -341,6 +342,12 @@ void testDetab(const string root) {
     assert(content == "void f();\n");
 }
 
+void testLongLineFormatting(const string root) {
+    auto ta = TestArea(root);
+    createLongLineCpp("long.hpp");
+    assert(autoformat("long.hpp").status == 0);
+}
+
 void createRepo() {
     git("init", ".");
     run("touch", ".gitignore");
@@ -423,6 +430,16 @@ void createSandboxFile(string content, string dst) {
 
 immutable unformattedFileCpp = "   void f(int* x)\n{}\n";
 alias createUnformattedCpp = dst => createSandboxFile(unformattedFileCpp, dst);
+
+immutable longLineCpp = "namespace this_is_a_very_long_namespace_just_to_create_a_line { namespace that_is_longer_than_100_letters { namespace as_to_force_funky_behavior { typedef int MyInt; }}}
+namespace foo {
+class A {
+public:
+void method(this_is_a_very_long_namespace_just_to_create_a_line::this_is_a_very_long_namespace_just_to_create_a_line::as_to_force_funky_behavior::MyInt a, this_is_a_very_long_namespace_just_to_create_a_line::this_is_a_very_long_namespace_just_to_create_a_line::as_to_force_funky_behavior::MyInt b, int c);
+};
+}
+";
+alias createLongLineCpp = dst => createSandboxFile(longLineCpp, dst);
 
 immutable unformattedFilePython = "def f(): \n return 1";
 alias createUnformattedPython = dst => createSandboxFile(unformattedFilePython, dst);
