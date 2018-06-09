@@ -417,26 +417,18 @@ auto run(T...)(string cmd, auto ref T args_) {
     return r;
 }
 
-immutable unformattedFileCpp = "   void f(int* x)\n{}\n";
-void createUnformattedCpp(string dst) {
-    auto f = File(dst, "w");
-    f.write(unformattedFileCpp);
+void createSandboxFile(string content, string dst) {
+    File(dst, "w").write(content);
 }
+
+immutable unformattedFileCpp = "   void f(int* x)\n{}\n";
+alias createUnformattedCpp = dst => createSandboxFile(unformattedFileCpp, dst);
 
 immutable unformattedFilePython = "def f(): \n return 1";
-void createUnformattedPython(string dst) {
-    auto f = File(dst, "w");
-    f.write(unformattedFilePython);
-}
+alias createUnformattedPython = dst => createSandboxFile(unformattedFilePython, dst);
 
 immutable unformattedFileD = "   void f(int* x)\n{}\n";
-void createUnformattedD(string dst) {
-    auto f = File(dst, "w");
-    f.write(unformattedFileD);
-}
+alias createUnformattedD = dst => createSandboxFile(unformattedFileD, dst);
 
 immutable trailingWhitespaceFile = "void f();   \n";
-void createTrailingWhitespaceFile(string dst) {
-    auto f = File(dst, "w");
-    f.write(trailingWhitespaceFile);
-}
+alias createTrailingWhitespaceFile = dst => createSandboxFile(trailingWhitespaceFile, dst);
