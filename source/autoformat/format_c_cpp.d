@@ -27,17 +27,20 @@ private immutable string[] clangFormatConf = import("clang_format.conf").splitte
 
 // Thread local optimization that reduced the console spam when the program
 // isn't installed.
-bool installed = true;
+private bool installed = true;
+
+immutable clangToolEnvKey = "AUTOFORMAT_CLANG_TOOL";
+
+auto getClangFormatterTool() @safe nothrow {
+    try {
+        return environment.get(clangToolEnvKey, "clang-format");
+    } catch (Exception e) {
+    }
+    return "astyle";
+}
 
 auto runClangFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    string tool = () nothrow{
-        try {
-            return environment.get("AUTOFORMAT_CLANG_TOOL", "clang-format");
-        }
-        catch (Exception e) {
-        }
-        return "astyle";
-    }();
+    string tool = getClangFormatterTool;
 
     if (tool == "astyle")
         return runAstyle(fname, backup, dry_run);
@@ -75,13 +78,11 @@ auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) 
         } else {
             rval = FormatterStatus.unchanged;
         }
-    }
-    catch (ProcessException ex) {
+    } catch (ProcessException ex) {
         // astyle isn't installed
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
         installed = false;
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
     }
 
@@ -117,13 +118,11 @@ auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_
         } else {
             rval = FormatterStatus.formattedOk;
         }
-    }
-    catch (ProcessException e) {
+    } catch (ProcessException e) {
         // clang-format isn't installed
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, e.msg);
         installed = false;
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
         rval = FormatterResult(FormatterStatus.failedWithUserMsg, e.msg);
     }
 

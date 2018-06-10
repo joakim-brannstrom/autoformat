@@ -22,6 +22,7 @@ fi
 
 AUTOFORMAT=autoformat
 FALLBACK_AUTOFORMAT="%s"
+export %s="%s"
 
 hash $AUTOFORMAT >/dev/null 2>/dev/null
 if [[ $? -ne 0 ]]; then
