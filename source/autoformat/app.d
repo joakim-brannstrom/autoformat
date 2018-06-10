@@ -84,8 +84,7 @@ int main(string[] args) nothrow {
 
     try {
         confLogger(conf.debug_);
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         errorLog("Unable to configure internal logger");
         errorLog(ex.msg);
         return -1;
@@ -98,8 +97,7 @@ int main(string[] args) nothrow {
     case Mode.setup:
         try {
             return setup(args);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog("Unable to perform the setup");
             errorLog(ex.msg);
             return -1;
@@ -110,16 +108,14 @@ int main(string[] args) nothrow {
         string path_to_binary;
         try {
             path_to_binary = thisExePath;
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog(
                     "Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0]);
             path_to_binary = args[0];
         }
         try {
             return installGitHook(AbsolutePath(conf.installHook), path_to_binary);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog("Unable to install the git hook");
             errorLog(ex.msg);
             return -1;
@@ -150,8 +146,7 @@ int fileMode(Config conf) nothrow {
                 return -1;
             else
                 files = tmp.get;
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog("Error during recursive processing of files");
             errorLog(ex.msg);
             return -1;
@@ -160,8 +155,7 @@ int fileMode(Config conf) nothrow {
     case FileMode.normalFileListFromStdin:
         try {
             files = filesFromStdin;
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog("Unable to read a list of files separated by newline from stdin");
             errorLog(ex.msg);
             return -1;
@@ -188,8 +182,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
         try {
             status = parallelRun!(oneFileRespectKind, OneFileConf)(files, pconf, tconf);
             logger.trace(status);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog("Failed to run");
             errorLog(ex.msg);
         }
@@ -203,8 +196,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
                 if (f.value.isDir) {
                     return FormatterStatus.unchanged;
                 }
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 return FormatterStatus.unchanged;
             }
 
@@ -216,8 +208,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
         try {
             status = parallelRun!(runDetab, OneFileConf)(files, pconf, tconf);
             logger.trace(status);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog("Failed to run");
             errorLog(ex.msg);
         }
@@ -254,12 +245,10 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         help = help_info.helpWanted;
 
         logger.info(conf.debug_, "Debug mode activated");
-    }
-    catch (std.getopt.GetOptException ex) {
+    } catch (std.getopt.GetOptException ex) {
         errorLog(ex.msg);
         help = true;
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         errorLog(ex.msg);
         help = true;
     }
@@ -343,8 +332,7 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
         if (f.value.isDir || f.value.extension.length == 0) {
             return FormatterStatus.unchanged;
         }
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         return FormatterStatus.unchanged;
     }
 
@@ -352,8 +340,7 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
     if (!res.ok) {
         try {
             logger.warningf("%s %s", f.index + 1, res.payload);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             errorLog(ex.msg);
         }
         return FormatterStatus.unchanged;
@@ -363,8 +350,7 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
 
     try {
         rval = formatFile(AbsolutePath(f.value), f.conf.backup, f.conf.dryRun);
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         errorLog(ex.msg);
     }
 
@@ -456,8 +442,7 @@ FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" d
                 break;
             }
         }
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         errorLog("Unable to format file: " ~ p);
         errorLog(ex.msg);
     }
@@ -472,8 +457,7 @@ void printHelp(string arg0, ref GetoptResult help_info) nothrow {
         defaultGetoptPrinter(format(`Tool to format [c, c++, java] source code
 Usage: %s [options] PATH`,
                 arg0), help_info.options);
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
         errorLog("Unable to print command line interface help information to stdout");
         errorLog(ex.msg);
     }
@@ -569,12 +553,15 @@ int installGitHook(AbsolutePath install_to, string autoformat_bin) {
         }
     }
 
+    import autoformat.format_c_cpp : clangToolEnvKey, getClangFormatterTool;
+
     auto git_pre_commit = buildPath(hook_dir, "pre-commit");
     auto git_pre_msg = buildPath(hook_dir, "prepare-commit-msg");
     auto git_auto_pre_commit = buildPath(hook_dir, "autoformat_pre-commit");
     auto git_auto_pre_msg = buildPath(hook_dir, "autoformat_prepare-commit-msg");
     logger.info("Installing git hooks to: ", install_to);
-    createHook(AbsolutePath(git_auto_pre_commit), format(hookPreCommit, autoformat_bin));
+    createHook(AbsolutePath(git_auto_pre_commit), format(hookPreCommit,
+            autoformat_bin, clangToolEnvKey, getClangFormatterTool));
     createHook(AbsolutePath(git_auto_pre_msg), format(hookPrepareCommitMsg, autoformat_bin));
     injectHook(AbsolutePath(git_pre_commit), git_auto_pre_commit.baseName);
     injectHook(AbsolutePath(git_pre_msg), git_auto_pre_msg.baseName);
