@@ -63,8 +63,18 @@ enum ToolMode {
     detabTool,
 }
 
+/// The verbosity level of the logging to use.
+enum VerboseMode {
+    /// Warning+
+    minimal,
+    /// Info+
+    info,
+    /// Trace+
+    trace
+}
+
 struct Config {
-    Flag!"debugMode" debug_;
+    VerboseMode verbose;
     Flag!"dryRun" dryRun;
     string installHook;
     Flag!"backup" backup;
@@ -83,10 +93,10 @@ int main(string[] args) nothrow {
     parseArgs(args, conf, help_info);
 
     try {
-        confLogger(conf.debug_);
+        confLogger(conf.verbose);
     } catch (Exception ex) {
-        errorLog("Unable to configure internal logger");
-        errorLog(ex.msg);
+        logger.error("Unable to configure internal logger").collectException;
+        logger.error(ex.msg).collectException;
         return -1;
     }
 
@@ -98,8 +108,8 @@ int main(string[] args) nothrow {
         try {
             return setup(args);
         } catch (Exception ex) {
-            errorLog("Unable to perform the setup");
-            errorLog(ex.msg);
+            logger.error("Unable to perform the setup").collectException;
+            logger.error(ex.msg).collectException;
             return -1;
         }
     case Mode.installGitHook:
@@ -109,15 +119,15 @@ int main(string[] args) nothrow {
         try {
             path_to_binary = thisExePath;
         } catch (Exception ex) {
-            errorLog(
-                    "Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0]);
+            logger.error("Unable to read the symlink '/proc/self/exe'. Using args[0] instead, " ~ args[0])
+                .collectException;
             path_to_binary = args[0];
         }
         try {
             return installGitHook(AbsolutePath(conf.installHook), path_to_binary);
         } catch (Exception ex) {
-            errorLog("Unable to install the git hook");
-            errorLog(ex.msg);
+            logger.error("Unable to install the git hook").collectException;
+            logger.error(ex.msg).collectException;
             return -1;
         }
     case Mode.checkGitTrailingWhitespace:
@@ -127,7 +137,7 @@ int main(string[] args) nothrow {
         if (res.status == FormatterStatus.unchanged) {
             return 0;
         } else if (res.status == FormatterStatus.failedWithUserMsg) {
-            errorLog(res.msg);
+            logger.error(res.msg).collectException;
         }
         return -1;
     case Mode.normal:
@@ -147,8 +157,8 @@ int fileMode(Config conf) nothrow {
             else
                 files = tmp.get;
         } catch (Exception ex) {
-            errorLog("Error during recursive processing of files");
-            errorLog(ex.msg);
+            logger.error("Error during recursive processing of files").collectException;
+            logger.error(ex.msg).collectException;
             return -1;
         }
         break;
@@ -156,8 +166,9 @@ int fileMode(Config conf) nothrow {
         try {
             files = filesFromStdin;
         } catch (Exception ex) {
-            errorLog("Unable to read a list of files separated by newline from stdin");
-            errorLog(ex.msg);
+            logger.error("Unable to read a list of files separated by newline from stdin")
+                .collectException;
+            logger.error(ex.msg).collectException;
             return -1;
         }
         break;
@@ -174,7 +185,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
     import std.typecons : tuple;
 
     const auto tconf = ToolConf(conf.dryRun, conf.backup);
-    const auto pconf = conf.debug_ ? PoolConf.debug_ : PoolConf.auto_;
+    const auto pconf = conf.verbose == VerboseMode.trace ? PoolConf.debug_ : PoolConf.auto_;
     FormatterStatus status;
 
     final switch (conf.formatMode) {
@@ -183,8 +194,8 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
             status = parallelRun!(oneFileRespectKind, OneFileConf)(files, pconf, tconf);
             logger.trace(status);
         } catch (Exception ex) {
-            errorLog("Failed to run");
-            errorLog(ex.msg);
+            logger.error("Failed to run").collectException;
+            logger.error(ex.msg).collectException;
         }
         break;
 
@@ -209,8 +220,8 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
             status = parallelRun!(runDetab, OneFileConf)(files, pconf, tconf);
             logger.trace(status);
         } catch (Exception ex) {
-            errorLog("Failed to run");
-            errorLog(ex.msg);
+            logger.error("Failed to run").collectException;
+            logger.error(ex.msg).collectException;
         }
         break;
     }
@@ -223,13 +234,21 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
-    bool debug_, dryRun, noBackup, recursive, setup, stdin_, help, check_whitespace, tool_detab;
+    bool check_whitespace;
+    bool dryRun;
+    bool help;
+    bool noBackup;
+    bool recursive;
+    bool setup;
+    bool stdin_;
+    bool tool_detab;
+    bool verbose_info;
+    bool verbose_trace;
 
     try {
         // dfmt off
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
             "check-trailing-whitespace", "check files for trailing whitespace", &check_whitespace,
-            "d|debug", "change loglevel to debug", &debug_,
             "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
             "n|dry-run", "(ONLY supported by c, c++, java) perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
             "no-backup", "no backup file is created", &noBackup,
@@ -237,19 +256,25 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
             "stdin", "file list separated by newline read from", &stdin_,
             "setup", "finalize installation of autoformatter by creating symlinks", &setup,
             "tool-detab", "whitespace checker and fixup (all filetypes, respects .noautoformat)", &tool_detab,
+            "v|verbose", "verbose mode is set to information", &verbose_info,
+            "vverbose", "verbose mode is set to trace", &verbose_trace,
             );
         // dfmt on
-        conf.debug_ = cast(typeof(Config.debug_)) debug_;
+        conf.verbose = () {
+            if (verbose_trace)
+                return VerboseMode.trace;
+            if (verbose_info)
+                return VerboseMode.info;
+            return VerboseMode.minimal;
+        }();
         conf.dryRun = cast(typeof(Config.dryRun)) dryRun;
         conf.backup = cast(typeof(Config.backup)) !noBackup;
         help = help_info.helpWanted;
-
-        logger.info(conf.debug_, "Debug mode activated");
     } catch (std.getopt.GetOptException ex) {
-        errorLog(ex.msg);
+        logger.error(ex.msg).collectException;
         help = true;
     } catch (Exception ex) {
-        errorLog(ex.msg);
+        logger.error(ex.msg).collectException;
         help = true;
     }
 
@@ -282,7 +307,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.rawFiles = args[1 .. $];
 
     if (conf.fileMode != FileMode.normalFileListFromStdin && args.length < 2) {
-        errorLog("Wrong number of arguments, probably missing FILE(s)");
+        logger.error("Wrong number of arguments, probably missing FILE(s)").collectException;
         conf.mode = Mode.helpAndExit;
         return;
     }
@@ -294,14 +319,22 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
     }
 }
 
-void confLogger(Flag!"debugMode" debug_) {
-    if (debug_) {
-        logger.globalLogLevel = logger.LogLevel.all;
-    } else {
-        import autoformat.logger;
+void confLogger(VerboseMode mode) {
+    import autoformat.logger;
 
+    switch (mode) {
+    case VerboseMode.info:
         logger.globalLogLevel = logger.LogLevel.info;
-        logger.sharedLog = new CustomLogger(logger.LogLevel.info);
+        logger.sharedLog = new SimpleLogger(logger.LogLevel.info);
+        break;
+    case VerboseMode.trace:
+        logger.globalLogLevel = logger.LogLevel.all;
+        logger.sharedLog = new DebugLogger(logger.LogLevel.info);
+        logger.info("Debug mode activated");
+        break;
+    default:
+        logger.globalLogLevel = logger.LogLevel.warning;
+        logger.sharedLog = new SimpleLogger(logger.LogLevel.info);
     }
 }
 
@@ -341,7 +374,7 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
         try {
             logger.warningf("%s %s", f.index + 1, res.payload);
         } catch (Exception ex) {
-            errorLog(ex.msg);
+            logger.error(ex.msg).collectException;
         }
         return FormatterStatus.unchanged;
     }
@@ -351,7 +384,7 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
     try {
         rval = formatFile(AbsolutePath(f.value), f.conf.backup, f.conf.dryRun);
     } catch (Exception ex) {
-        errorLog(ex.msg);
+        logger.error(ex.msg).collectException;
     }
 
     return rval;
@@ -443,8 +476,8 @@ FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" d
             }
         }
     } catch (Exception ex) {
-        errorLog("Unable to format file: " ~ p);
-        errorLog(ex.msg);
+        logger.error("Unable to format file: " ~ p).collectException;
+        logger.error(ex.msg).collectException;
     }
 
     return status;
@@ -458,8 +491,9 @@ void printHelp(string arg0, ref GetoptResult help_info) nothrow {
 Usage: %s [options] PATH`,
                 arg0), help_info.options);
     } catch (Exception ex) {
-        errorLog("Unable to print command line interface help information to stdout");
-        errorLog(ex.msg);
+        logger.error("Unable to print command line interface help information to stdout")
+            .collectException;
+        logger.error(ex.msg).collectException;
     }
 }
 

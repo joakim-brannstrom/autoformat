@@ -9,13 +9,12 @@ one at http://mozilla.org/MPL/2.0/.
 */
 module autoformat.logger;
 
+import std.algorithm : among;
+import std.stdio : writeln, writefln, stderr, stdout;
 import logger = std.experimental.logger;
+import std.experimental.logger : LogLevel;
 
-class CustomLogger : logger.Logger {
-    import std.algorithm : among;
-    import std.stdio : stdout, stderr;
-    import std.experimental.logger;
-
+class SimpleLogger : logger.Logger {
     this(LogLevel lv) @safe {
         super(lv);
     }
@@ -27,17 +26,23 @@ class CustomLogger : logger.Logger {
             out_ = stdout;
         }
 
-        string tabs = "\t";
-        switch (payload.logLevel) {
-        case LogLevel.trace:
-            tabs = "\t\t";
-            break;
-        case LogLevel.info:
-            tabs = "\t\t";
-            break;
-        default:
+        out_.writefln("%s: %s", payload.logLevel, payload.msg);
+    }
+}
+
+class DebugLogger : logger.Logger {
+    this(const logger.LogLevel lv) {
+        super(lv);
+    }
+
+    override void writeLogMsg(ref LogEntry payload) @trusted {
+        auto out_ = stderr;
+
+        if (payload.logLevel.among(LogLevel.info, LogLevel.trace)) {
+            out_ = stdout;
         }
 
-        out_.writefln("%s: " ~ tabs ~ "%s", payload.logLevel, payload.msg);
+        out_.writefln("%s: %s [%s:%d]", payload.logLevel, payload.msg,
+                payload.funcName, payload.line);
     }
 }

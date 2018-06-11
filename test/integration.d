@@ -321,10 +321,11 @@ void testNotMultipleMessageWhenToolNotInstalled(const string root) {
     // installed.
     // "There shall be only one error message when the tool is not installed"
     // (must run single threaded)
-    auto r = autoformat(debugMode ? "" : "-d", "a.py", "b.py");
-    logger.info(r.output);
+    auto r = autoformat("a.py", "b.py");
     assert(r.status == 0);
-    auto m = r.output.matchAll(regex("executable file not found", "i"));
+    logger.info(r.output);
+    auto m = r.output.matchFirst(regex("executable file not found", "im"));
+    logger.info(m);
     assert(m.count <= 1);
 }
 
@@ -332,7 +333,7 @@ void testDetab(const string root) {
     auto ta = TestArea(root);
     createTrailingWhitespaceFile("a.txt");
 
-    auto r = autoformat(debugMode ? "" : "-d", "--tool-detab", "a.txt");
+    auto r = autoformat("--tool-detab", "a.txt");
     logger.info(r.output);
     assert(r.status == 0);
 
@@ -398,7 +399,7 @@ auto git(T...)(T args_) {
 
 auto autoformat(T...)(auto ref T args_) {
     if (debugMode) {
-        return run(autoformatBinary, "-d", args_);
+        return run(autoformatBinary, "--vverbose", args_);
     }
 
     return run(autoformatBinary, args_);
