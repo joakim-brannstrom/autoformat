@@ -41,17 +41,3 @@ class CustomLogger : logger.Logger {
         out_.writefln("%s: " ~ tabs ~ "%s", payload.logLevel, payload.msg);
     }
 }
-
-void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
-        string prettyFuncName = __PRETTY_FUNCTION__, string moduleName = __MODULE__, T...)(
-        lazy string msg, lazy T args) nothrow {
-    try {
-        logger.logf!(line, file, funcName, prettyFuncName, moduleName)(lvl, msg, args);
-    }
-    catch (Exception ex) {
-    }
-}
-
-alias infoLog(T...) = internalLog!(logger.LogLevel.info, T);
-alias traceLog(T...) = internalLog!(logger.LogLevel.trace, T);
-alias errorLog(T...) = internalLog!(logger.LogLevel.error, T);
