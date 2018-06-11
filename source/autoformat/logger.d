@@ -15,8 +15,8 @@ import logger = std.experimental.logger;
 import std.experimental.logger : LogLevel;
 
 class SimpleLogger : logger.Logger {
-    this(LogLevel lv) @safe {
-        super(lv);
+    this(const LogLevel lvl = LogLevel.warning) @safe {
+        super(lvl);
     }
 
     override void writeLogMsg(ref LogEntry payload) @trusted {
@@ -31,8 +31,8 @@ class SimpleLogger : logger.Logger {
 }
 
 class DebugLogger : logger.Logger {
-    this(const logger.LogLevel lv) {
-        super(lv);
+    this(const logger.LogLevel lvl = LogLevel.trace) {
+        super(lvl);
     }
 
     override void writeLogMsg(ref LogEntry payload) @trusted {
