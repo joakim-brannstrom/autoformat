@@ -329,7 +329,7 @@ void confLogger(VerboseMode mode) {
         break;
     case VerboseMode.trace:
         logger.globalLogLevel = logger.LogLevel.all;
-        logger.sharedLog = new DebugLogger(logger.LogLevel.info);
+        logger.sharedLog = new DebugLogger(logger.LogLevel.all);
         logger.info("Debug mode activated");
         break;
     default:
