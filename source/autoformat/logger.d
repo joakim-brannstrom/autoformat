@@ -9,15 +9,14 @@ one at http://mozilla.org/MPL/2.0/.
 */
 module autoformat.logger;
 
+import std.algorithm : among;
+import std.stdio : writeln, writefln, stderr, stdout;
 import logger = std.experimental.logger;
+import std.experimental.logger : LogLevel;
 
-class CustomLogger : logger.Logger {
-    import std.algorithm : among;
-    import std.stdio : stdout, stderr;
-    import std.experimental.logger;
-
-    this(LogLevel lv) @safe {
-        super(lv);
+class SimpleLogger : logger.Logger {
+    this(const LogLevel lvl = LogLevel.warning) @safe {
+        super(lvl);
     }
 
     override void writeLogMsg(ref LogEntry payload) @trusted {
@@ -27,31 +26,23 @@ class CustomLogger : logger.Logger {
             out_ = stdout;
         }
 
-        string tabs = "\t";
-        switch (payload.logLevel) {
-        case LogLevel.trace:
-            tabs = "\t\t";
-            break;
-        case LogLevel.info:
-            tabs = "\t\t";
-            break;
-        default:
+        out_.writefln("%s: %s", payload.logLevel, payload.msg);
+    }
+}
+
+class DebugLogger : logger.Logger {
+    this(const logger.LogLevel lvl = LogLevel.trace) {
+        super(lvl);
+    }
+
+    override void writeLogMsg(ref LogEntry payload) @trusted {
+        auto out_ = stderr;
+
+        if (payload.logLevel.among(LogLevel.info, LogLevel.trace)) {
+            out_ = stdout;
         }
 
-        out_.writefln("%s: " ~ tabs ~ "%s", payload.logLevel, payload.msg);
+        out_.writefln("%s: %s [%s:%d]", payload.logLevel, payload.msg,
+                payload.funcName, payload.line);
     }
 }
-
-void internalLog(logger.LogLevel lvl, int line = __LINE__, string file = __FILE__, string funcName = __FUNCTION__,
-        string prettyFuncName = __PRETTY_FUNCTION__, string moduleName = __MODULE__, T...)(
-        lazy string msg, lazy T args) nothrow {
-    try {
-        logger.logf!(line, file, funcName, prettyFuncName, moduleName)(lvl, msg, args);
-    }
-    catch (Exception ex) {
-    }
-}
-
-alias infoLog(T...) = internalLog!(logger.LogLevel.info, T);
-alias traceLog(T...) = internalLog!(logger.LogLevel.trace, T);
-alias errorLog(T...) = internalLog!(logger.LogLevel.error, T);
