@@ -15,6 +15,7 @@ import std.typecons : Flag, Tuple;
 
 public import autoformat.format_c_cpp;
 public import autoformat.format_d;
+public import autoformat.format_rust;
 public import autoformat.format_python;
 public import autoformat.filetype : isOkToFormat;
 
@@ -29,8 +30,9 @@ alias Formatter = Tuple!(FormatterCheckFunc, FormatterFunc);
 // dfmt off
 enum formatters = [
     Formatter(&isC_CppFiletype, &runClangFormatter),
-    Formatter(&isJavaFiletype, &runAstyle),
     Formatter(&isDFiletype, &runDfmt),
+    Formatter(&isJavaFiletype, &runAstyle),
     Formatter(&isPythonFiletype, &runPythonFormatter),
+    Formatter(&isRustFiletype, &runRustFormatter),
 ];
 // dfmt on

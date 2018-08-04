@@ -19,7 +19,9 @@ import std.path;
 import autoformat.git;
 import autoformat.types;
 
-enum filetypeCheckers = [&isC_CppFiletype, &isDFiletype, &isJavaFiletype, &isPythonFiletype];
+enum filetypeCheckers = [
+        &isC_CppFiletype, &isDFiletype, &isJavaFiletype, &isPythonFiletype, &isRustFiletype
+    ];
 
 immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoformat_filenames.conf")
     .splitter("\n").filter!(a => a.length > 0).array();
@@ -54,6 +56,11 @@ bool isPythonFiletype(string p) nothrow {
     return types.canFind(p) != 0;
 }
 
+bool isRustFiletype(string p) nothrow {
+    enum types = import("filetype_rust.txt").splitter.array();
+    return types.canFind(p) != 0;
+}
+
 auto isOkToFormat(AbsolutePath p) nothrow {
     struct Result {
         string payload;
@@ -80,8 +87,7 @@ auto isOkToFormat(AbsolutePath p) nothrow {
                 if (isGitRoot(a)) {
                     break;
                 }
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
             }
 
             w = dirName(w);
