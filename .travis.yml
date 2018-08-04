@@ -1,15 +1,12 @@
 language: d
+
 d:
     - dmd-2.071.2
     - dmd
-    - ldc-1.1.0
+    - ldc
 
 os:
     - linux
-
-sudo: required
-group: edge
-dist: trusty
 
 notifications:
     email: false
@@ -21,4 +18,5 @@ branches:
     only:
         - master
 
-script: ./travis.sh
+script:
+    - ./travis.sh

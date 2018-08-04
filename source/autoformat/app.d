@@ -369,7 +369,7 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
         return FormatterStatus.unchanged;
     }
 
-    auto res = f.value.isOkToFormat;
+    auto res = isOkToFormat(f.value);
     if (!res.ok) {
         try {
             logger.warningf("%s %s", f.index + 1, res.payload);
