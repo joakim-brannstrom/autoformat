@@ -487,7 +487,7 @@ void printHelp(string arg0, ref GetoptResult help_info) nothrow {
     import std.format : format;
 
     try {
-        defaultGetoptPrinter(format(`Tool to format [c, c++, java] source code
+        defaultGetoptPrinter(format(`Tool to format [c, c++, java, d, rust] source code
 Usage: %s [options] PATH`,
                 arg0), help_info.options);
     } catch (Exception ex) {
