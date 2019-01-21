@@ -549,19 +549,21 @@ int installGitHook(AbsolutePath install_to, string autoformat_bin) {
     static void injectHook(AbsolutePath p, string raw) {
         import std.utf;
 
-        string s = format("$GIT_DIR/hooks/%s $@", raw);
-        // remove the old hook so it doesn't collide. This will probably have
-        // to stay until 2019.
-        string remove = format("source $GIT_DIR/hooks/%s", raw);
+        // remove the old hook so it doesn't collide.
+        // v1: This will probably have to stay until late 2019.
+        string v1 = format("source $GIT_DIR/hooks/%s", raw);
+        // v2: Stay until late 2020
+        string v2 = format("$GIT_DIR/hooks/%s $@", raw);
+        string latest = format("$(git rev-parse --git-dir)/hooks/%s $@", raw);
 
         if (exists(p)) {
-            auto content = File(p).byLine.appendUnique(s, remove).joiner("\n").text;
+            auto content = File(p).byLine.appendUnique(latest, [v1, v2, latest]).joiner("\n").text;
             auto f = File(p, "w");
             f.writeln(content);
         } else {
             auto f = File(p, "w");
             f.writeln("#!/bin/bash");
-            f.writeln(s);
+            f.writeln(latest);
             f.close;
         }
         makeExecutable(p);
@@ -606,7 +608,7 @@ int installGitHook(AbsolutePath install_to, string autoformat_bin) {
 }
 
 /// Append the string to the range if it doesn't exist.
-auto appendUnique(T)(T r, string msg, string remove) if (isInputRange!T) {
+auto appendUnique(T)(T r, string msg, string[] remove) if (isInputRange!T) {
     enum State {
         analyzing,
         found,
@@ -616,7 +618,7 @@ auto appendUnique(T)(T r, string msg, string remove) if (isInputRange!T) {
 
     struct Result {
         string msg;
-        string remove;
+        string[] remove;
         T r;
         State st;
 
@@ -640,7 +642,7 @@ auto appendUnique(T)(T r, string msg, string remove) if (isInputRange!T) {
                 r.popFront;
                 if (r.empty) {
                     st = State.append;
-                } else if (r.front == remove) {
+                } else if (canFind(remove, r.front)) {
                     popFront;
                 } else if (r.front == msg) {
                     st = State.found;

@@ -2,7 +2,9 @@
 
 set -e
 
-git clone --depth 1 -b integration-test-tools https://github.com/joakim-brannstrom/autoformat.git tools
+if [[ ! -d tools ]]; then
+    git clone --depth 1 -b integration-test-tools https://github.com/joakim-brannstrom/autoformat.git tools
+fi
 
 export PATH=$PWD/tools/bin:$PATH
 
