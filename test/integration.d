@@ -26,6 +26,16 @@ import logger = std.experimental.logger;
 
 string autoformatBinary = "../build/autoformat";
 bool debugMode = false;
+immutable bool[string] tools;
+
+shared static this() {
+    // check that the tools are installed
+    foreach (a; ["astyle", "clang-format", "dfmt"]) {
+        auto r = std.process.execute(["which", a]);
+        r.output.write;
+        tools[a] = r.status == 0;
+    }
+}
 
 int main(string[] args) {
     import std.string : startsWith;
@@ -76,6 +86,11 @@ int main(string[] args) {
         testNotMultipleMessageWhenToolNotInstalled(root);
     }
 
+    if ("dfmt" in tools) {
+        testFormatOneFileD(root);
+        testFormatFilesInGitRepoD(root);
+    }
+
     testTrailingWhitespaceDetector(root);
     testDetab(root);
 
@@ -93,31 +108,30 @@ int main(string[] args) {
 void sanityCheck() {
     auto p = environment.get("PATH");
     writeln("Path is: ", p);
+    writeln("Tools: ", tools);
     writeln;
-
-    // check that the tools are installed
-    foreach (a; ["astyle", "clang-format", "dfmt"]) {
-        auto r = std.process.execute(["which", a]);
-        r.output.write;
-        assert(r.status == 0);
-    }
 }
 
 void testFormatOneFile(const string root) {
     auto ta = TestArea(root);
     createUnformattedCpp("a.h");
     createUnformattedCpp("a.hpp");
-    createUnformattedD("a.d");
     createUnformattedPython("a.py");
 
     assert(autoformat("a.h").status == 0);
     assert(autoformat("a.hpp").status == 0);
-    assert(autoformat("a.d").status == 0);
     assert(autoformat("a.py").status == 0);
 
     // should be resiliant against non-existing files.
     // do not error out on them.
     assert(autoformat("a.foo").status == 0);
+}
+
+void testFormatOneFileD(const string root) {
+    auto ta = TestArea(root);
+    createUnformattedD("a.d");
+
+    assert(autoformat("a.d").status == 0);
 }
 
 void testFormatFiles(const string root) {
@@ -137,8 +151,13 @@ void testFormatFilesInGitRepo(const string root) {
     auto ta = TestArea(root);
     createRepo();
     run("touch", "a.hpp");
-    run("touch", "a.d");
     assert(autoformat("a.hpp").status == 0);
+}
+
+void testFormatFilesInGitRepoD(const string root) {
+    auto ta = TestArea(root);
+    createRepo();
+    run("touch", "a.d");
     assert(autoformat("a.d").status == 0);
 }
 
