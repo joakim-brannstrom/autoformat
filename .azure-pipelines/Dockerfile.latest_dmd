@@ -1,0 +1,22 @@
+# ubuntu_bionic_base
+FROM dlang2/dmd-ubuntu
+
+# Dependencies:
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+        ca-certificates \
+        git astyle clang-format
+
+WORKDIR /opt
+
+# fix_repo
+COPY repo.tar.gz /opt
+RUN mkdir repo
+RUN tar xfz repo.tar.gz -C repo && rm repo.tar.gz
+RUN git config --global user.email "you@example.com"
+RUN git config --global user.name "Your Name"
+
+# build_with_dub
+RUN cd repo && dub test
+RUN cd repo && dub build
+RUN cd repo && dub run -c integration_test
