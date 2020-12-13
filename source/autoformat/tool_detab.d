@@ -15,7 +15,6 @@ import std.typecons : Flag;
 import logger = std.experimental.logger;
 
 import autoformat.types;
-import autoformat.logger;
 
 auto runDetab(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     auto rval = FormatterResult(FormatError.init);
