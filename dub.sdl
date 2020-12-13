@@ -6,6 +6,15 @@ license "BSL-1.0"
 
 targetPath "build"
 
+//dependency "my" version="~>0.0.21"
+//dependency "sumtype" version="~>1.0.1"
+
+dependency "autoformat:my" version="*"
+subPackage "./vendor/mylib"
+
+dependency "autoformat:sumtype" version="*"
+subPackage "./vendor/mylib/vendor/sumtype"
+
 configuration "application" {
     targetType "executable"
     mainSourceFile "source/autoformat/app.d"
