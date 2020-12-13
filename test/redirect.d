@@ -26,9 +26,5 @@ int main(string[] args) {
 
     chdir("test");
 
-    if (spawnProcess(["dub", "build"]).wait != 0) {
-        return -1;
-    }
-
-    return spawnProcess(["dub", "test", "--"]).wait != 0;
+    return spawnProcess(["dub", "test"]).wait;
 }
