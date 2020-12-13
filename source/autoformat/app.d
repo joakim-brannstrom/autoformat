@@ -5,6 +5,7 @@ Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 */
 module autoformat.app;
 
+import logger = std.experimental.logger;
 import std.algorithm;
 import std.conv : text;
 import std.exception;
@@ -20,7 +21,7 @@ import std.stdio;
 import std.typecons;
 import std.variant;
 
-import logger = std.experimental.logger;
+import my.optional;
 
 import autoformat.formatter_tools;
 import autoformat.git;
@@ -97,7 +98,7 @@ int main(string[] args) nothrow {
     } catch (Exception ex) {
         logger.error("Unable to configure internal logger").collectException;
         logger.error(ex.msg).collectException;
-        return -1;
+        return 1;
     }
 
     final switch (conf.mode) {
@@ -110,7 +111,7 @@ int main(string[] args) nothrow {
         } catch (Exception ex) {
             logger.error("Unable to perform the setup").collectException;
             logger.error(ex.msg).collectException;
-            return -1;
+            return 1;
         }
     case Mode.installGitHook:
         import std.file : thisExePath;
@@ -128,7 +129,7 @@ int main(string[] args) nothrow {
         } catch (Exception ex) {
             logger.error("Unable to install the git hook").collectException;
             logger.error(ex.msg).collectException;
-            return -1;
+            return 1;
         }
     case Mode.checkGitTrailingWhitespace:
         import autoformat.tool_whitespace_check;
@@ -139,7 +140,7 @@ int main(string[] args) nothrow {
         } else if (res.status == FormatterStatus.failedWithUserMsg) {
             logger.error(res.msg).collectException;
         }
-        return -1;
+        return 1;
     case Mode.normal:
         return fileMode(conf);
     }
@@ -153,13 +154,13 @@ int fileMode(Config conf) nothrow {
         try {
             auto tmp = recursiveFileList(AbsolutePath(conf.rawFiles[0]));
             if (tmp.isNull)
-                return -1;
+                return 1;
             else
                 files = tmp.get;
         } catch (Exception ex) {
             logger.error("Error during recursive processing of files").collectException;
             logger.error(ex.msg).collectException;
-            return -1;
+            return 1;
         }
         break;
     case FileMode.normalFileListFromStdin:
@@ -169,11 +170,16 @@ int fileMode(Config conf) nothrow {
             logger.error("Unable to read a list of files separated by newline from stdin")
                 .collectException;
             logger.error(ex.msg).collectException;
-            return -1;
+            return 1;
         }
         break;
     case FileMode.normal:
-        files = conf.rawFiles.map!(a => AbsolutePath(a)).array();
+        try {
+            files = conf.rawFiles.map!(a => AbsolutePath(a)).array();
+        } catch (Exception e) {
+            logger.error(e.msg).collectException;
+            return 1;
+        }
         break;
     }
 
@@ -518,7 +524,7 @@ int setup(string[] args) {
  */
 int installGitHook(AbsolutePath install_to, string autoformat_bin) {
     static void usage() {
-        if (gitConfigValue(gitConfigKey).among("auto", "warn", "interrupt")) {
+        if (gitConfigValue(gitConfigKey).orElse(string.init).among("auto", "warn", "interrupt")) {
             return;
         }
 
@@ -582,10 +588,10 @@ int installGitHook(AbsolutePath install_to, string autoformat_bin) {
     {
         auto p = gitHookPath(install_to);
         if (p.hasValue) {
-            hook_dir = p.get!AbsolutePath;
+            hook_dir = p.orElse(AbsolutePath.init);
         } else {
             logger.error("Unable to locate a git hook directory at: ", install_to);
-            return -1;
+            return 1;
         }
     }
 

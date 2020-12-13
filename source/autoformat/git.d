@@ -11,7 +11,8 @@ import std.exception;
 import std.file;
 import std.path;
 import std.process;
-import std.variant;
+
+import my.optional;
 
 import autoformat.types;
 
@@ -34,75 +35,69 @@ bool isGitRepo() nothrow {
     try {
         auto r = execute(["git", "rev-parse", "--show-toplevel"]);
         return r.status == 0;
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
     }
 
     return false;
 }
 
-auto gitHookPath(AbsolutePath repo) {
-    alias Result = Algebraic!AbsolutePath;
-
+Optional!AbsolutePath gitHookPath(AbsolutePath repo) {
     immutable regular = buildPath(repo, ".git", "hooks");
     immutable submodule = buildPath(repo, "hooks");
 
     if (exists(regular)) {
-        return Result(AbsolutePath(regular));
+        return some(AbsolutePath(regular));
     } else if (exists(buildPath(repo, "refs"))) {
-        return Result(AbsolutePath(submodule));
+        return some(AbsolutePath(submodule));
     }
 
-    return Result();
+    return none!AbsolutePath;
 }
 
 /// Path to the root of the git archive from current.
-AbsolutePath gitPathToRoot() nothrow {
+Optional!AbsolutePath gitPathToRoot() @safe {
     import std.string : strip;
 
     try {
         auto r = execute(["git", "rev-parse", "--show-toplevel"]);
-        return AbsolutePath(r.output.strip);
-    }
-    catch (Exception ex) {
+        return some(AbsolutePath(r.output.strip));
+    } catch (Exception ex) {
     }
 
-    return AbsolutePath(null);
+    return none!AbsolutePath;
 }
 
 /** Resolves the path to the git directory.
  * Not necessarily the same as the root.
  * Useful for finding the root of a hierarchy of submodules.
  */
-AbsolutePath gitPathToTrueRoot() nothrow {
+Optional!AbsolutePath gitPathToTrueRoot() nothrow {
     import std.string : strip;
 
     try {
-        auto p = buildPath(gitPathToRoot, ".git");
+        auto p = buildPath(gitPathToRoot.toString, ".git");
         auto r = execute(["git", "rev-parse", "--resolve-git-dir", p]);
-        return AbsolutePath(r.output.strip);
-    }
-    catch (Exception ex) {
+        return some(AbsolutePath(r.output.strip));
+    } catch (Exception ex) {
     }
 
-    return AbsolutePath(null);
+    return none!AbsolutePath;
 }
 
-string gitConfigValue(string c) {
+Optional!string gitConfigValue(string c) {
     import std.string : strip;
 
     try {
         auto a = execute(["git", "config", c]);
         if (a.status != 0) {
-            return null;
+            return none!string;
         }
 
-        return a.output.strip;
-    }
-    catch (ErrnoException ex) {
+        return some(a.output.strip);
+    } catch (ErrnoException ex) {
     }
 
-    return null;
+    return none!string;
 }
 
 struct GitHash {
@@ -121,8 +116,7 @@ GitHash gitHead() nothrow {
         if (res.status == 0) {
             h = GitHash(res.output.strip);
         }
-    }
-    catch (Exception ex) {
+    } catch (Exception ex) {
     }
 
     return h;
