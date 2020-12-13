@@ -33,16 +33,16 @@ bool installed = true;
 // TODO dry_run not supported.
 auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     if (dry_run || !installed) {
-        return FormatterResult(FormatterStatus.unchanged);
+        return FormatterResult(Unchanged.init);
     }
 
     string[] opts = dfmtConf.map!(a => a.idup).array();
 
-    auto rval = FormatterResult(FormatterStatus.error);
+    auto rval = FormatterResult(FormatError.init);
 
     try {
         if (backup) {
-            copy(fname, fname ~ ".orig");
+            copy(fname, fname.toString ~ ".orig");
         }
 
         auto arg = ["dfmt"] ~ opts ~ [cast(string) fname];
@@ -50,15 +50,13 @@ auto runDfmt(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) no
         auto res = execute(arg);
         logger.trace(res.output);
 
-        rval = FormatterStatus.formattedOk;
-    }
-    catch (ProcessException ex) {
+        rval = FormatterResult(FormattedOk.init);
+    } catch (ProcessException ex) {
         // dfmt isn't installed
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        rval = FormatterResult(FailedWithUserMsg(ex.msg));
         installed = false;
-    }
-    catch (Exception ex) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+    } catch (Exception ex) {
+        rval = FormatterResult(FailedWithUserMsg(ex.msg));
     }
 
     return rval;

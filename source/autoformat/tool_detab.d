@@ -18,46 +18,43 @@ import autoformat.types;
 import autoformat.logger;
 
 auto runDetab(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    auto rval = FormatterResult(FormatterStatus.error);
+    auto rval = FormatterResult(FormatError.init);
 
     char[] input;
     try {
         input = cast(char[]) std.file.read(cast(string) fname);
-    }
-    catch (Exception ex) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+    } catch (Exception ex) {
+        rval = FailedWithUserMsg(ex.msg);
         return rval;
     }
 
     char[] output;
     try {
         output = filter(input);
-    }
-    catch (Exception e) {
-        rval = FormatterResult(FormatterStatus.wouldChange);
+    } catch (Exception e) {
+        rval = WouldChange.init;
         return rval;
     }
 
     if (input == output) {
-        rval = FormatterStatus.unchanged;
+        rval = Unchanged.init;
         return rval;
     }
 
     if (dry_run) {
-        rval = FormatterResult(FormatterStatus.wouldChange);
+        rval = WouldChange.init;
         return rval;
     }
 
     try {
         if (backup) {
-            copy(fname, fname ~ ".orig");
+            copy(fname, fname.toString ~ ".orig");
         }
 
         std.file.write(fname, output);
-        rval = FormatterResult(FormatterStatus.formattedOk);
-    }
-    catch (Exception ex) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        rval = FormattedOk.init;
+    } catch (Exception ex) {
+        rval = FailedWithUserMsg(ex.msg);
     }
 
     return rval;

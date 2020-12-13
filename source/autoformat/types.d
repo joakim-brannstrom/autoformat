@@ -8,22 +8,26 @@ module autoformat.types;
 import sumtype;
 public import my.path : Path, AbsolutePath;
 
-enum FormatterStatus {
-    /// failed to format or some other kind of error
-    error,
-    /// error when formatting with an error msg
-    failedWithUserMsg,
-    ///
-    unchanged,
-    /// formatted file with no errors
-    formattedOk,
-    /// The file would change if it where autoformatted
-    wouldChange,
-}
-
-struct FormatterResult {
-    FormatterStatus status;
+/// failed to format or some other kind of error
+struct FormatError {
     string msg;
-
-    alias status this;
 }
+
+/// error when formatting with an error msg
+struct FailedWithUserMsg {
+    string msg;
+}
+
+struct Unchanged {
+}
+
+/// formatted file with no errors
+struct FormattedOk {
+}
+
+/// The file would change if it where autoformatted
+struct WouldChange {
+}
+
+alias FormatterResult = SumType!(FormatError, FailedWithUserMsg, Unchanged,
+        FormattedOk, WouldChange);

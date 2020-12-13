@@ -22,6 +22,7 @@ import std.typecons;
 import std.variant;
 
 import my.optional;
+import sumtype;
 
 import autoformat.formatter_tools;
 import autoformat.git;
@@ -134,13 +135,13 @@ int main(string[] args) nothrow {
     case Mode.checkGitTrailingWhitespace:
         import autoformat.tool_whitespace_check;
 
-        FormatterResult res = runWhitespaceCheck;
-        if (res.status == FormatterStatus.unchanged) {
-            return 0;
-        } else if (res.status == FormatterStatus.failedWithUserMsg) {
-            logger.error(res.msg).collectException;
-        }
-        return 1;
+        int returnCode;
+        runWhitespaceCheck.match!((Unchanged a) {}, (FormattedOk a) {}, (WouldChange a) {
+        }, (FailedWithUserMsg a) {
+            logger.error(a.msg).collectException;
+            returnCode = 1;
+        }, (FormatError a) { returnCode = 1; });
+        return returnCode;
     case Mode.normal:
         return fileMode(conf);
     }
@@ -192,13 +193,12 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
 
     const auto tconf = ToolConf(conf.dryRun, conf.backup);
     const auto pconf = conf.verbose == VerboseMode.trace ? PoolConf.debug_ : PoolConf.auto_;
-    FormatterStatus status;
+    FormatterResult result;
 
     final switch (conf.formatMode) {
     case ToolMode.normal:
         try {
-            status = parallelRun!(oneFileRespectKind, OneFileConf)(files, pconf, tconf);
-            logger.trace(status);
+            result = parallelRun!(oneFileRespectKind, OneFileConf)(files, pconf, tconf);
         } catch (Exception ex) {
             logger.error("Failed to run").collectException;
             logger.error(ex.msg).collectException;
@@ -211,10 +211,10 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
         static auto runDetab(OneFileConf f) nothrow {
             try {
                 if (f.value.isDir) {
-                    return FormatterStatus.unchanged;
+                    return FormatterResult(Unchanged.init);
                 }
             } catch (Exception ex) {
-                return FormatterStatus.unchanged;
+                return FormatterResult(Unchanged.init);
             }
 
             static import autoformat.tool_detab;
@@ -223,8 +223,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
         }
 
         try {
-            status = parallelRun!(runDetab, OneFileConf)(files, pconf, tconf);
-            logger.trace(status);
+            result = parallelRun!(runDetab, OneFileConf)(files, pconf, tconf);
         } catch (Exception ex) {
             logger.error("Failed to run").collectException;
             logger.error(ex.msg).collectException;
@@ -232,11 +231,17 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
         break;
     }
 
+    int returnCode;
     if (conf.dryRun) {
-        return status.among(FormatterStatus.formattedOk, FormatterStatus.wouldChange) ? -1 : 0;
+        result.match!((Unchanged a) {}, (FormattedOk a) { returnCode = 1; }, (WouldChange a) {
+            returnCode = 1;
+        }, (FailedWithUserMsg a) {}, (FormatError a) {});
     } else {
-        return status == FormatterStatus.error ? -1 : 0;
+        result.match!((Unchanged a) {}, (FormattedOk a) {}, (WouldChange a) {},
+                (FailedWithUserMsg a) {}, (FormatError a) { returnCode = 1; });
     }
+
+    return returnCode;
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
@@ -366,13 +371,13 @@ struct OneFileConf {
 
 alias ToolConf = Tuple!(Flag!"dryRun", "dryRun", Flag!"backup", "backup");
 
-FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
+FormatterResult oneFileRespectKind(OneFileConf f) nothrow {
     try {
         if (f.value.isDir || f.value.extension.length == 0) {
-            return FormatterStatus.unchanged;
+            return FormatterResult(Unchanged.init);
         }
     } catch (Exception ex) {
-        return FormatterStatus.unchanged;
+        return FormatterResult(Unchanged.init);
     }
 
     auto res = isOkToFormat(f.value);
@@ -382,10 +387,10 @@ FormatterStatus oneFileRespectKind(OneFileConf f) nothrow {
         } catch (Exception ex) {
             logger.error(ex.msg).collectException;
         }
-        return FormatterStatus.unchanged;
+        return FormatterResult(Unchanged.init);
     }
 
-    auto rval = FormatterStatus.unchanged;
+    auto rval = FormatterResult(Unchanged.init);
 
     try {
         rval = formatFile(AbsolutePath(f.value), f.conf.backup, f.conf.dryRun);
@@ -401,16 +406,19 @@ enum PoolConf {
     auto_
 }
 
-FormatterStatus parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf poolc, ToolConf conf) {
-    static FormatterStatus merge(FormatterStatus a, FormatterStatus b) {
-        // when a is an error it can never change
-        if (!b.among(FormatterStatus.formattedOk, FormatterStatus.unchanged)) {
-            return b;
-        } else if (b == FormatterStatus.formattedOk) {
-            return b;
-        } else {
-            return a;
-        }
+FormatterResult parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf poolc, ToolConf conf) {
+    static FormatterResult merge(FormatterResult a, FormatterResult b) {
+        auto rval = a;
+
+        // if a is an error then let it propagate
+        a.match!((Unchanged a) { rval = b; }, (FormattedOk a) { rval = b; }, (WouldChange a) {
+        }, (FailedWithUserMsg a) {}, (FormatError a) {});
+
+        // if b is unchanged then let the previous value propagate
+        b.match!((Unchanged a) { rval = a; }, (FormattedOk a) {}, (WouldChange a) {
+        }, (FailedWithUserMsg a) {}, (FormatError a) {});
+
+        return rval;
     }
 
     // dfmt off
@@ -434,7 +442,8 @@ FormatterStatus parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf p
 
     scope (exit)
         pool.stop;
-    auto status = pool.reduce!merge(FormatterStatus.unchanged, std.algorithm.map!Func(files));
+    auto status = pool.reduce!merge(FormatterResult(Unchanged.init),
+            std.algorithm.map!Func(files));
     pool.finish;
 
     return status;
@@ -452,8 +461,8 @@ Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
     return rval;
 }
 
-FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    FormatterStatus status;
+FormatterResult formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
+    FormatterResult status;
 
     try {
         logger.tracef("%s (backup:%s dryRun:%s)", p, backup, dry_run);
@@ -463,21 +472,11 @@ FormatterStatus formatFile(AbsolutePath p, Flag!"backup" backup, Flag!"dryRun" d
                 auto res = f[1](p, backup, dry_run);
                 status = res;
 
-                final switch (res.status) {
-                case FormatterStatus.error:
-                    goto case;
-                case FormatterStatus.failedWithUserMsg:
-                    logger.error(res.msg);
-                    break;
-                case FormatterStatus.unchanged:
-                    break;
-                case FormatterStatus.formattedOk:
-                    goto case;
-                case FormatterStatus.wouldChange:
+                res.match!((Unchanged a) {}, (FormattedOk a) {
                     logger.info("formatted ", p);
-                    break;
-                }
-
+                }, (WouldChange a) { logger.info("formatted (dryrun) ", p); }, (FailedWithUserMsg a) {
+                    logger.error(a.msg);
+                }, (FormatError a) { logger.error("unable to format ", p); });
                 break;
             }
         }
