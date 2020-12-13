@@ -6,10 +6,16 @@ license "BSL-1.0"
 
 targetPath "build"
 
-configuration "unittest" {
-    targetType "executable"
-    targetName "test_runner"
+dependency "test-autoformat:my" version="*"
+subPackage "../vendor/mylib"
 
+dependency "test-autoformat:sumtype" version="*"
+subPackage "../vendor/mylib/vendor/sumtype"
+
+dependency "test-autoformat:silly" version="*"
+subPackage "../vendor/mylib/vendor/silly"
+
+configuration "unittest" {
     sourceFiles "integration.d"
     importPaths "."
 }

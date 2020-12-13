@@ -19,9 +19,7 @@ import std.path;
 import autoformat.git;
 import autoformat.types;
 
-enum filetypeCheckers = [
-        &isC_CppFiletype, &isDFiletype, &isJavaFiletype, &isPythonFiletype, &isRustFiletype
-    ];
+enum filetypeCheckers = [&isC_CppFiletype, &isDFiletype, &isRustFiletype];
 
 immutable string[] suppressAutoformatFilenames = import("magic_suppress_autoformat_filenames.conf")
     .splitter("\n").filter!(a => a.length > 0).array();
@@ -43,16 +41,6 @@ bool isC_CppFiletype(string p) nothrow {
 
 bool isDFiletype(string p) nothrow {
     enum types = import("filetype_d.txt").splitter.array();
-    return types.canFind(p) != 0;
-}
-
-bool isJavaFiletype(string p) nothrow {
-    enum types = import("filetype_java.txt").splitter.array();
-    return types.canFind(p) != 0;
-}
-
-bool isPythonFiletype(string p) nothrow {
-    enum types = import("filetype_python.txt").splitter.array();
     return types.canFind(p) != 0;
 }
 

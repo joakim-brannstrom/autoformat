@@ -27,7 +27,7 @@ private bool installed = true;
 
 auto runRustFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     if (!installed) {
-        return FormatterResult(FormatterStatus.unchanged);
+        return FormatterResult(Unchanged.init);
     }
 
     string[] opts;
@@ -37,7 +37,7 @@ auto runRustFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dr
     else if (backup)
         opts ~= "--backup";
 
-    auto rval = FormatterResult(FormatterStatus.error);
+    auto rval = FormatterResult(FormatError.init);
 
     try {
         auto arg = ["rustfmt"] ~ opts ~ (cast(string) fname);
@@ -45,13 +45,13 @@ auto runRustFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dr
         auto res = execute(arg);
         logger.trace(res.output);
 
-        rval = FormatterStatus.formattedOk;
+        rval = FormattedOk.init;
     } catch (ProcessException ex) {
         // rustfmt isn't installed
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        rval = FailedWithUserMsg(ex.msg);
         installed = false;
     } catch (Exception ex) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+        rval = FailedWithUserMsg(ex.msg);
     }
 
     return rval;

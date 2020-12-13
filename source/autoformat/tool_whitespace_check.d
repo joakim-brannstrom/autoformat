@@ -31,12 +31,11 @@ auto runWhitespaceCheck() nothrow {
             import std.file : getcwd;
 
             if (isGitRepo == 0) {
-                return FormatterResult(FormatterStatus.failedWithUserMsg, "Trailing whitespace detector only work when ran from inside a git repo. The current directory is NOT a git repo: " ~ getcwd);
+                return FormatterResult(FailedWithUserMsg("Trailing whitespace detector only work when ran from inside a git repo. The current directory is NOT a git repo: " ~ getcwd));
             }
-        }
-        catch (Exception ex) {
-            return FormatterResult(FormatterStatus.failedWithUserMsg,
-                    "Aborting trailing whitespace check, unable to determine if the current directory is a git repo");
+        } catch (Exception ex) {
+            return FormatterResult(FailedWithUserMsg(
+                    "Aborting trailing whitespace check, unable to determine if the current directory is a git repo"));
         }
 
         isGitDirectory = GitDirectory.git;
@@ -44,10 +43,10 @@ auto runWhitespaceCheck() nothrow {
     case GitDirectory.git:
         break;
     case GitDirectory.other:
-        return FormatterResult(FormatterStatus.unchanged);
+        return FormatterResult(Unchanged.init);
     }
 
-    auto rval = FormatterResult(FormatterStatus.error);
+    auto rval = FormatterResult(FormatError.init);
     auto against = gitHead;
 
     try {
@@ -57,15 +56,14 @@ auto runWhitespaceCheck() nothrow {
         logger.trace(res.output);
 
         if (res.status == 0) {
-            rval = FormatterResult(FormatterStatus.unchanged);
+            rval = Unchanged.init;
         } else {
-            rval = FormatterResult(FormatterResult.failedWithUserMsg,
+            rval = FailedWithUserMsg(
                     "Trailing whitespace check failed. Fix these files to pass the check:\n"
                     ~ res.output);
         }
-    }
-    catch (Exception ex) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
+    } catch (Exception ex) {
+        rval = FailedWithUserMsg(ex.msg);
     }
 
     return rval;

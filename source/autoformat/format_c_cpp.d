@@ -41,52 +41,7 @@ auto getClangFormatterTool() @safe nothrow {
 
 auto runClangFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     string tool = getClangFormatterTool;
-
-    if (tool == "astyle")
-        return runAstyle(fname, backup, dry_run);
-    else
-        return runClangFormat(fname, backup, dry_run);
-}
-
-auto runAstyle(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    string[] opts = astyleConf.map!(a => a.idup).array;
-
-    if (!installed) {
-        return FormatterResult(FormatterStatus.unchanged);
-    }
-
-    if (backup) {
-        opts ~= "--suffix=.orig";
-    } else {
-        opts ~= "--suffix=none";
-    }
-
-    if (dry_run) {
-        opts ~= ["--dry-run"];
-    }
-
-    auto rval = FormatterResult(FormatterStatus.error);
-
-    try {
-        auto arg = ["astyle"] ~ opts ~ [cast(string) fname];
-        auto res = loggedExecute(arg);
-
-        if (dry_run && res.output.length != 0) {
-            rval = FormatterResult(FormatterStatus.wouldChange);
-        } else if (res.output.length != 0) {
-            rval = FormatterStatus.formattedOk;
-        } else {
-            rval = FormatterStatus.unchanged;
-        }
-    } catch (ProcessException ex) {
-        // astyle isn't installed
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
-        installed = false;
-    } catch (Exception ex) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, ex.msg);
-    }
-
-    return rval;
+    return runClangFormat(fname, backup, dry_run);
 }
 
 auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
@@ -95,7 +50,7 @@ auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_
     string[] opts = clangFormatConf.map!(a => a.idup).array;
 
     if (!installed) {
-        return FormatterResult(FormatterStatus.unchanged);
+        return FormatterResult(Unchanged.init);
     }
 
     if (dry_run)
@@ -105,25 +60,26 @@ auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_
 
     auto arg = ["clang-format"] ~ opts ~ [cast(string) fname];
 
-    auto rval = FormatterResult(FormatterStatus.error);
+    auto rval = FormatterResult(FormatError.init);
 
     try {
-        if (!dry_run && backup)
-            copy(fname, fname ~ ".orig");
+        if (!dry_run && backup) {
+            copy(fname, fname.toString ~ ".orig");
+        }
 
         auto res = loggedExecute(arg);
 
         if (dry_run && res.output.splitter("\n").count > 3) {
-            rval = FormatterResult(FormatterStatus.wouldChange);
+            rval = FormatterResult(WouldChange.init);
         } else {
-            rval = FormatterStatus.formattedOk;
+            rval = FormatterResult(FormattedOk.init);
         }
     } catch (ProcessException e) {
         // clang-format isn't installed
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, e.msg);
+        rval = FormatterResult(FailedWithUserMsg(e.msg));
         installed = false;
     } catch (Exception e) {
-        rval = FormatterResult(FormatterStatus.failedWithUserMsg, e.msg);
+        rval = FormatterResult(FailedWithUserMsg(e.msg));
     }
 
     return rval;
