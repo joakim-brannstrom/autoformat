@@ -361,7 +361,7 @@ auto git(T...)(ref TestArea ta, T args_) {
 }
 
 auto autoformat(T...)(ref TestArea ta, auto ref T args_) {
-    return ta.exec(autoformatBinary, "--vverbose", args_);
+    return ta.exec(autoformatBinary, "-v", "trace", args_);
 }
 
 void createSandboxFile(string content, string dst) {

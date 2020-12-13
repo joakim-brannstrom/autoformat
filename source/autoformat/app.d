@@ -21,13 +21,13 @@ import std.stdio;
 import std.typecons;
 import std.variant;
 
+import colorlog;
 import my.optional;
 import sumtype;
 
 import autoformat.formatter_tools;
 import autoformat.git;
 import autoformat.types;
-import autoformat.logger;
 
 immutable hookPreCommit = import("pre_commit");
 immutable hookPrepareCommitMsg = import("prepare_commit_msg");
@@ -65,18 +65,8 @@ enum ToolMode {
     detabTool,
 }
 
-/// The verbosity level of the logging to use.
-enum VerboseMode {
-    /// Warning+
-    minimal,
-    /// Info+
-    info,
-    /// Trace+
-    trace
-}
-
 struct Config {
-    VerboseMode verbose;
+    VerboseMode verbosity;
     Flag!"dryRun" dryRun;
     string installHook;
     Flag!"backup" backup;
@@ -89,18 +79,13 @@ struct Config {
 }
 
 int main(string[] args) nothrow {
+    confLogger(VerboseMode.info).collectException;
+
     Config conf;
     GetoptResult help_info;
 
     parseArgs(args, conf, help_info);
-
-    try {
-        confLogger(conf.verbose);
-    } catch (Exception ex) {
-        logger.error("Unable to configure internal logger").collectException;
-        logger.error(ex.msg).collectException;
-        return 1;
-    }
+    confLogger(conf.verbosity).collectException;
 
     final switch (conf.mode) {
     case Mode.helpAndExit:
@@ -192,7 +177,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
     import std.typecons : tuple;
 
     const auto tconf = ToolConf(conf.dryRun, conf.backup);
-    const auto pconf = conf.verbose == VerboseMode.trace ? PoolConf.debug_ : PoolConf.auto_;
+    const auto pconf = conf.verbosity == VerboseMode.trace ? PoolConf.debug_ : PoolConf.auto_;
     FormatterResult result;
 
     final switch (conf.formatMode) {
@@ -245,6 +230,8 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
 }
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
+    import std.traits : EnumMembers;
+
     bool check_whitespace;
     bool dryRun;
     bool help;
@@ -253,31 +240,21 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
     bool setup;
     bool stdin_;
     bool tool_detab;
-    bool verbose_info;
-    bool verbose_trace;
 
     try {
         // dfmt off
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
             "check-trailing-whitespace", "check files for trailing whitespace", &check_whitespace,
             "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
-            "n|dry-run", "(ONLY supported by c, c++, java) perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
             "no-backup", "no backup file is created", &noBackup,
+            "n|dry-run", "(ONLY supported by c, c++, java) perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
             "r|recursive", "autoformat recursive", &recursive,
-            "stdin", "file list separated by newline read from", &stdin_,
             "setup", "finalize installation of autoformatter by creating symlinks", &setup,
+            "stdin", "file list separated by newline read from", &stdin_,
             "tool-detab", "whitespace checker and fixup (all filetypes, respects .noautoformat)", &tool_detab,
-            "v|verbose", "verbose mode is set to information", &verbose_info,
-            "vverbose", "verbose mode is set to trace", &verbose_trace,
+            "v|verbose", format("Set the verbosity (%-(%s, %))", [EnumMembers!(VerboseMode)]), &conf.verbosity,
             );
         // dfmt on
-        conf.verbose = () {
-            if (verbose_trace)
-                return VerboseMode.trace;
-            if (verbose_info)
-                return VerboseMode.info;
-            return VerboseMode.minimal;
-        }();
         conf.dryRun = cast(typeof(Config.dryRun)) dryRun;
         conf.backup = cast(typeof(Config.backup)) !noBackup;
         help = help_info.helpWanted;
@@ -327,25 +304,6 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
 
     if (tool_detab) {
         conf.formatMode = ToolMode.detabTool;
-    }
-}
-
-void confLogger(VerboseMode mode) {
-    import autoformat.logger;
-
-    switch (mode) {
-    case VerboseMode.info:
-        logger.globalLogLevel = logger.LogLevel.info;
-        logger.sharedLog = new SimpleLogger(logger.LogLevel.info);
-        break;
-    case VerboseMode.trace:
-        logger.globalLogLevel = logger.LogLevel.all;
-        logger.sharedLog = new DebugLogger(logger.LogLevel.all);
-        logger.info("Debug mode activated");
-        break;
-    default:
-        logger.globalLogLevel = logger.LogLevel.warning;
-        logger.sharedLog = new SimpleLogger(logger.LogLevel.info);
     }
 }
 

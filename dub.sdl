@@ -15,6 +15,9 @@ subPackage "./vendor/mylib"
 dependency "autoformat:sumtype" version="*"
 subPackage "./vendor/mylib/vendor/sumtype"
 
+dependency "autoformat:colorlog" version="*"
+subPackage "./vendor/colorlog"
+
 configuration "application" {
     targetType "executable"
     mainSourceFile "source/autoformat/app.d"
