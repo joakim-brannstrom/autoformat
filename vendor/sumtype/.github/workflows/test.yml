@@ -1,0 +1,45 @@
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+        dc:
+          - dmd-latest
+          - dmd-2.095.1
+          - dmd-2.094.2
+          - ldc-latest
+          - ldc-1.24.0
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install D compiler
+        uses: dlang-community/setup-dlang@v1
+        with:
+          compiler: ${{ matrix.dc }}
+
+      - name: Run tests (POSIX)
+        run: |
+          dub test --compiler=${DC}
+          dub test --compiler=${DC} --build=unittest-dip1000
+          if [ "$DC" = "dmd" ]; then ./test-betterc.sh; fi
+        if: matrix.os != 'windows-latest'
+
+      - name: Run tests (Windows)
+        run: |
+          dub test --compiler=$env:DC
+          dub test --compiler=$env:DC --build=unittest-dip1000
+          if ($env:DC -eq 'dmd') { dmd -unittest -g -betterC -I=src -i -run test_betterc.d }
+        if: matrix.os == 'windows-latest'
