@@ -415,7 +415,7 @@ Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
         return rval;
     }
 
-    rval = dirEntries(path, SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
+    rval = dirEntries(path, std.file.SpanMode.depth).map!(a => AbsolutePath(a.name)).array();
     return rval;
 }
 

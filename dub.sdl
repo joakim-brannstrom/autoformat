@@ -6,17 +6,18 @@ license "BSL-1.0"
 
 targetPath "build"
 
-//dependency "my" version="~>0.0.21"
-//dependency "sumtype" version="~>1.0.1"
+dependency "my" version="~>0.0.32"
+dependency "sumtype" version="~>1.1.1"
+dependency "colorlog" version="~>0.0.6"
 
-dependency "autoformat:my" version="*"
-subPackage "./vendor/mylib"
-
-dependency "autoformat:sumtype" version="*"
-subPackage "./vendor/mylib/vendor/sumtype"
-
-dependency "autoformat:colorlog" version="*"
-subPackage "./vendor/colorlog"
+//dependency "autoformat:my" version="*"
+//subPackage "./vendor/mylib"
+//
+//dependency "autoformat:sumtype" version="*"
+//subPackage "./vendor/mylib/vendor/sumtype"
+//
+//dependency "autoformat:colorlog" version="*"
+//subPackage "./vendor/colorlog"
 
 configuration "application" {
     targetType "executable"
