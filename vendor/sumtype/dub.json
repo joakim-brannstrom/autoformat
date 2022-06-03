@@ -22,6 +22,9 @@
 	],
 	"copyright": "Copyright © 2018, Paul Backus",
 	"description": "A sum type with pattern matching",
+	"dflags": [
+		"-preview=fieldwise"
+	],
 	"importPaths": [
 		"src/"
 	],
@@ -31,7 +34,7 @@
 		"src/"
 	],
 	"toolchainRequirements": {
-		"frontend": ">=2.94.0"
+		"frontend": ">=2.98.0"
 	},
-	"version": "1.1.1"
+	"version": "1.2.4"
 }

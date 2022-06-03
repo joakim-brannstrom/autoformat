@@ -18,8 +18,8 @@ Authors: Paul Backus
 +/
 module sumtype;
 
-/// $(H3 Basic usage)
 version (D_BetterC) {} else
+/// $(H3 Basic usage)
 @safe unittest {
     import std.math: isClose;
 
@@ -77,6 +77,7 @@ version (D_BetterC) {} else
     assert(!isFahrenheit(t3));
 }
 
+version (D_BetterC) {} else
 /** $(H3 Introspection-based matching)
  *
  * In the `length` and `horiz` functions below, the handlers for `match` do not
@@ -85,7 +86,6 @@ version (D_BetterC) {} else
  * properties will be matched by the `rect` handlers, and any type with `r` and
  * `theta` properties will be matched by the `polar` handlers.
  */
-version (D_BetterC) {} else
 @safe unittest {
     import std.math: isClose, cos, PI, sqrt;
 
@@ -118,6 +118,7 @@ version (D_BetterC) {} else
     assert(horiz(v).isClose(sqrt(0.5)));
 }
 
+version (D_BetterC) {} else
 /** $(H3 Arithmetic expression evaluator)
  *
  * This example makes use of the special placeholder type `This` to define a
@@ -125,7 +126,6 @@ version (D_BetterC) {} else
  * [https://en.wikipedia.org/wiki/Abstract_syntax_tree|abstract syntax tree] for
  * representing simple arithmetic expressions.
  */
-version (D_BetterC) {} else
 @system unittest {
     import std.functional: partial;
     import std.traits: EnumMembers;
@@ -224,7 +224,7 @@ import std.meta: AliasSeq, Filter, IndexOf = staticIndexOf, Map = staticMap;
 import std.meta: NoDuplicates;
 import std.meta: anySatisfy, allSatisfy;
 import std.traits: hasElaborateCopyConstructor, hasElaborateDestructor;
-import std.traits: isAssignable, isCopyable, isStaticArray;
+import std.traits: isAssignable, isCopyable, isRvalueAssignable, isStaticArray;
 import std.traits: ConstOf, ImmutableOf, InoutOf, TemplateArgsOf;
 import std.traits: CommonType;
 import std.typecons: ReplaceTypeUnless;
@@ -253,6 +253,15 @@ private enum isHashable(T) = __traits(compiles,
 );
 
 private enum hasPostblit(T) = __traits(hasPostblit, T);
+
+private enum isInout(T) = is(T == inout);
+
+// Workaround for dlang issue 19669
+private enum haveDip1000 = __traits(compiles, () @safe {
+	int x;
+	int* p;
+	p = &x;
+});
 
 /**
  * A [tagged union](https://en.wikipedia.org/wiki/Tagged_union) that can hold a
@@ -340,61 +349,56 @@ public:
 		{
 			import core.lifetime: forward;
 
-			// Workaround for dlang issue 21229
-			storage = () {
-				static if (isCopyable!T) {
-					mixin("Storage newStorage = { ",
-						// Workaround for dlang issue 21542
-						Storage.memberName!T, ": (__ctfe ? value : forward!value)",
-					" };");
-				} else {
-					mixin("Storage newStorage = { ",
-						Storage.memberName!T, " : forward!value",
-					" };");
-				}
-
-				return newStorage;
-			}();
+			static if (isCopyable!T) {
+				// Workaround for dlang issue 21542
+				__traits(getMember, storage, Storage.memberName!T) = __ctfe ? value : forward!value;
+			} else {
+				__traits(getMember, storage, Storage.memberName!T) = forward!value;
+			}
 
 			tag = tid;
 		}
 
-		static if (isCopyable!T) {
+		static if (isCopyable!(const(T))) {
 			// Avoid defining the same constructor multiple times
 			static if (IndexOf!(const(T), Map!(ConstOf, Types)) == tid) {
 				/// ditto
 				this(const(T) value) const
 				{
-					storage = () {
-						mixin("const(Storage) newStorage = { ",
-							Storage.memberName!T, ": value",
-						" };");
-
-						return newStorage;
-					}();
-
-					tag = tid;
-				}
-			}
-
-			static if (IndexOf!(immutable(T), Map!(ImmutableOf, Types)) == tid) {
-				/// ditto
-				this(immutable(T) value) immutable
-				{
-					storage = () {
-						mixin("immutable(Storage) newStorage = { ",
-							Storage.memberName!T, ": value",
-						" };");
-
-						return newStorage;
-					}();
-
+					__traits(getMember, storage, Storage.memberName!T) = value;
 					tag = tid;
 				}
 			}
 		} else {
 			@disable this(const(T) value) const;
+		}
+
+		static if (isCopyable!(immutable(T))) {
+			static if (IndexOf!(immutable(T), Map!(ImmutableOf, Types)) == tid) {
+				/// ditto
+				this(immutable(T) value) immutable
+				{
+					__traits(getMember, storage, Storage.memberName!T) = value;
+					tag = tid;
+				}
+			}
+		} else {
 			@disable this(immutable(T) value) immutable;
+		}
+
+		static if (isCopyable!(inout(T))) {
+			static if (IndexOf!(inout(T), Map!(InoutOf, Types)) == tid) {
+				/// ditto
+				this(Value)(Value value) inout
+					if (is(Value == DeducedParameterType!(inout(T))))
+				{
+					__traits(getMember, storage, Storage.memberName!T) = value;
+					tag = tid;
+				}
+			}
+		} else {
+			@disable this(Value)(Value value) inout
+				if (is(Value == DeducedParameterType!(inout(T))));
 		}
 	}
 
@@ -402,6 +406,7 @@ public:
 		static if (
 			allSatisfy!(isCopyable, Map!(InoutOf, Types))
 			&& !anySatisfy!(hasPostblit, Map!(InoutOf, Types))
+			&& allSatisfy!(isInout, Map!(InoutOf, Types))
 		) {
 			/// Constructs a `SumType` that's a copy of another `SumType`.
 			this(ref inout(SumType) other) inout
@@ -496,26 +501,48 @@ public:
 			/**
 			 * Assigns a value to a `SumType`.
 			 *
-			 * Assigning to a `SumType` is `@system` if any of the
-			 * `SumType`'s members contain pointers or references, since
-			 * those members may be reachable through external references,
-			 * and overwriting them could therefore lead to memory
-			 * corruption.
+			 * If any of the `SumType`'s members other than the one being assigned
+			 * to contain pointers or references, it is possible for the assignment
+			 * to cause memory corruption (see the
+			 * ["Memory corruption" example](#memory-corruption) below for an
+			 * illustration of how). Therefore, such assignments are considered
+			 * `@system`.
 			 *
 			 * An individual assignment can be `@trusted` if the caller can
-			 * guarantee that there are no outstanding references to $(I any)
-			 * of the `SumType`'s members when the assignment occurs.
+			 * guarantee that there are no outstanding references to any `SumType`
+			 * members that contain pointers or references at the time the
+			 * assignment occurs.
+			 *
+			 * Examples:
+			 *
+			 * $(H3 Memory corruption)
+			 *
+			 * This example shows how assignment to a `SumType` can be used to
+			 * cause memory corruption in `@system` code. In `@safe` code, the
+			 * assignment `s = 123` would not be allowed.
+			 *
+			 * ---
+			 * SumType!(int*, int) s = new int;
+			 * s.tryMatch!(
+			 *     (ref int* p) {
+			 *         s = 123; // overwrites `p`
+			 *         return *p; // undefined behavior
+			 *     }
+			 * );
+			 * ---
 			 */
 			ref SumType opAssign(T rhs)
 			{
 				import core.lifetime: forward;
 				import std.traits: hasIndirections, hasNested;
-				import std.meta: Or = templateOr;
+				import std.meta: AliasSeq, Or = templateOr;
 
-				enum mayContainPointers =
-					anySatisfy!(Or!(hasIndirections, hasNested), Types);
+				alias OtherTypes =
+					AliasSeq!(Types[0 .. tid], Types[tid + 1 .. $]);
+				enum unsafeToOverwrite =
+					anySatisfy!(Or!(hasIndirections, hasNested), OtherTypes);
 
-				static if (mayContainPointers) {
+				static if (unsafeToOverwrite) {
 					cast(void) () @system {}();
 				}
 
@@ -669,8 +696,8 @@ public:
 	 * Returns the index of the type of the `SumType`'s current value in the
 	 * `SumType`'s [Types].
 	 *
-	 * If the `SumType` is qualified, then its qualifiers are applied to
-	 * [Types] before determining the index.
+	 * If the `SumType` is qualified, returns the index of the type in [Types]
+	 * whose qualified version matches the `SumType`'s current value.
 	 */
 	size_t typeIndex() const
 	{
@@ -1263,6 +1290,26 @@ version (D_BetterC) {} else
 	Outer y = x;
 }
 
+// Types with qualified copy constructors
+@safe unittest {
+	static struct ConstCopy
+	{
+		int n;
+		this(inout int n) inout { this.n = n; }
+		this(ref const typeof(this) other) const { this.n = other.n; }
+	}
+
+	static struct ImmutableCopy
+	{
+		int n;
+		this(inout int n) inout { this.n = n; }
+		this(ref immutable typeof(this) other) immutable { this.n = other.n; }
+	}
+
+	const SumType!ConstCopy x = const(ConstCopy)(1);
+	immutable SumType!ImmutableCopy y = immutable(ImmutableCopy)(1);
+}
+
 // Types with disabled opEquals
 @safe unittest {
 	static struct S
@@ -1365,6 +1412,55 @@ version (D_BetterC) {} else
 	assert(x.typeIndex == y.typeIndex);
 }
 
+// @safe assignment to the only pointer in a SumType
+@safe unittest {
+	SumType!(string, int) sm = 123;
+
+	assert(__traits(compiles, () @safe {
+		sm = "this should be @safe";
+	}));
+}
+
+// Pointers to local variables
+@safe unittest {
+	enum haveDip1000 = __traits(compiles, () @safe {
+		int n;
+		int* p = &n;
+	});
+
+	static if (haveDip1000) {
+		int n = 123;
+		immutable int ni = 456;
+
+		SumType!(int*) s = &n;
+		const SumType!(int*) sc = &n;
+		immutable SumType!(int*) si = &ni;
+	}
+}
+
+// Dlang issue 22572: immutable member type with copy constructor
+@safe unittest {
+	static struct CopyConstruct
+	{
+		this(ref inout CopyConstruct other) inout {}
+	}
+
+	static immutable struct Value
+	{
+		CopyConstruct c;
+	}
+
+	SumType!Value s;
+}
+
+// Construction of inout-qualified SumTypes
+@safe unittest {
+	static inout(SumType!(int[])) example(inout(int[]) arr)
+	{
+		return inout(SumType!(int[]))(arr);
+	}
+}
+
 /// True if `T` is an instance of the `SumType` template, otherwise false.
 private enum bool isSumTypeInstance(T) = is(T == SumType!Args, Args...);
 
@@ -1380,7 +1476,22 @@ private enum bool isSumTypeInstance(T) = is(T == SumType!Args, Args...);
 }
 
 /// True if `T` is a [SumType] or implicitly converts to one, otherwise false.
-enum bool isSumType(T) = is(T : SumType!Args, Args...);
+template isSumType(T)
+{
+	static if (is(T : SumType!Args, Args...)) {
+		enum isSumType = true;
+	} else static if (is(T == struct) && __traits(getAliasThis, T).length > 0) {
+		// Workaround for dlang issue 21975
+		import std.traits: ReturnType;
+
+		alias AliasThisType = ReturnType!((T t) =>
+			__traits(getMember, t, __traits(getAliasThis, T)[0])
+		);
+		enum isSumType = .isSumType!AliasThisType;
+	} else {
+		enum isSumType = false;
+	}
+}
 
 ///
 @safe unittest {
@@ -1398,6 +1509,24 @@ enum bool isSumType(T) = is(T : SumType!Args, Args...);
 	assert(isSumType!(SumType!int));
 	assert(isSumType!ConvertsToSumType);
 	assert(!isSumType!ContainsSumType);
+}
+
+@safe unittest {
+	static struct AliasThisVar(T)
+	{
+		SumType!T payload;
+		alias payload this;
+	}
+
+	static struct AliasThisFunc(T)
+	{
+		SumType!T payload;
+		ref get() { return payload; }
+		alias get this;
+	}
+
+	static assert(isSumType!(AliasThisVar!int));
+	static assert(isSumType!(AliasThisFunc!int));
 }
 
 /**
@@ -1549,6 +1678,7 @@ template match(handlers...)
     assert(!sameDimensions(d, b));
 }
 
+version (D_Exceptions)
 /**
  * Attempts to call a type-appropriate function with the value held in a
  * [SumType], and throws on failure.
@@ -1569,7 +1699,6 @@ template match(handlers...)
  *
  * See_Also: `std.variant.tryVisit`
  */
-version (D_Exceptions)
 template tryMatch(handlers...)
 {
 	import std.typecons: No;
@@ -1587,12 +1716,12 @@ template tryMatch(handlers...)
 	}
 }
 
+version (D_Exceptions)
 /**
  * Thrown by [tryMatch] when an unhandled type is encountered.
  *
  * Not available when compiled with `-betterC`.
  */
-version (D_Exceptions)
 class MatchException : Exception
 {
 	///
@@ -1612,7 +1741,7 @@ class MatchException : Exception
 template canMatch(alias handler, Ts...)
 	if (Ts.length > 0)
 {
-	enum canMatch = is(typeof((Ts args) => handler(args)));
+	enum canMatch = is(typeof((ref Ts args) => handler(args)));
 }
 
 ///
@@ -1679,7 +1808,7 @@ private size_t stride(size_t dim, lengths...)()
 
 private template matchImpl(Flag!"exhaustive" exhaustive, handlers...)
 {
-	auto matchImpl(SumTypes...)(auto ref SumTypes args)
+	auto ref matchImpl(SumTypes...)(auto ref SumTypes args)
 		if (allSatisfy!(isSumType, SumTypes) && args.length > 0)
 	{
 		enum typeCount(SumType) = SumType.Types.length;
@@ -2111,6 +2240,15 @@ version (D_Exceptions)
 	assert(value.get!double.isClose(6.28));
 }
 
+// Handlers that return by ref
+@safe unittest {
+	SumType!int x = 123;
+
+	x.match!(ref (ref int n) => n) = 456;
+
+	assert(x.match!((int n) => n == 456));
+}
+
 // Unreachable handlers
 @safe unittest {
 	alias MySum = SumType!(int, string);
@@ -2296,18 +2434,77 @@ version (D_Exceptions)
 	}));
 }
 
-static if (__traits(compiles, { import std.traits: isRvalueAssignable; })) {
-	import std.traits: isRvalueAssignable;
-} else private {
-	enum isRvalueAssignable(Lhs, Rhs = Lhs) = __traits(compiles, lvalueOf!Lhs = rvalueOf!Rhs);
-	struct __InoutWorkaroundStruct{}
-	@property T rvalueOf(T)(inout __InoutWorkaroundStruct = __InoutWorkaroundStruct.init);
-	@property ref T lvalueOf(T)(inout __InoutWorkaroundStruct = __InoutWorkaroundStruct.init);
+// return ref
+// issue: https://issues.dlang.org/show_bug.cgi?id=23101
+// Only test on compiler versions >= 2.100, to avoid compiler bugs
+static if (haveDip1000 && __VERSION__ >= 2100)
+@safe unittest {
+	assert(!__traits(compiles, () {
+		SumType!(int, string) st;
+		return st.match!(
+			function int* (string x) => null,
+			function int* (return ref int i) => &i,
+		);
+	}));
+
+	SumType!(int, string) st;
+	assert(__traits(compiles, () {
+		return st.match!(
+			function int* (string x) => null,
+			function int* (return ref int i) => &i,
+		);
+	}));
 }
 
 private void destroyIfOwner(T)(ref T value)
 {
 	static if (hasElaborateDestructor!T) {
 		destroy(value);
+	}
+}
+
+static if (__traits(compiles, { import std.traits: DeducedParameterType; })) {
+	import std.traits: DeducedParameterType;
+} else {
+	/**
+	 * The parameter type deduced by IFTI when an expression of type T is passed as
+	 * an argument to a template function.
+	 *
+	 * For all types other than pointer and slice types, `DeducedParameterType!T`
+	 * is the same as `T`. For pointer and slice types, it is `T` with the
+	 * outer-most layer of qualifiers dropped.
+	 */
+	private template DeducedParameterType(T)
+	{
+		import std.traits: Unqual;
+
+		static if (is(T == U*, U) || is(T == U[], U))
+			alias DeducedParameterType = Unqual!T;
+		else
+			alias DeducedParameterType = T;
+	}
+
+	@safe unittest
+	{
+		static assert(is(DeducedParameterType!(const(int)) == const(int)));
+		static assert(is(DeducedParameterType!(const(int[2])) == const(int[2])));
+
+		static assert(is(DeducedParameterType!(const(int*)) == const(int)*));
+		static assert(is(DeducedParameterType!(const(int[])) == const(int)[]));
+	}
+
+	@safe unittest
+	{
+		static struct NoCopy
+		{
+			@disable this(this);
+		}
+
+		static assert(is(DeducedParameterType!NoCopy == NoCopy));
+	}
+
+	@safe unittest
+	{
+		static assert(is(DeducedParameterType!(inout(int[])) == inout(int)[]));
 	}
 }

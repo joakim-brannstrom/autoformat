@@ -6,14 +6,10 @@ license "BSL-1.0"
 
 targetPath "build"
 
-dependency "test-autoformat:my" version="*"
-subPackage "../vendor/mylib"
-
-dependency "test-autoformat:sumtype" version="*"
-subPackage "../vendor/mylib/vendor/sumtype"
-
-dependency "test-autoformat:silly" version="*"
-subPackage "../vendor/mylib/vendor/silly"
+dependency "my" version="~>0.0.36"
+dependency "sumtype" version="~>1.2.4"
+dependency "colorlog" version="~>0.0.7"
+dependency "silly" version="1.0.2"
 
 configuration "unittest" {
     sourceFiles "integration.d"
