@@ -6,24 +6,23 @@ Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 module autoformat.app;
 
 import logger = std.experimental.logger;
-import std.algorithm;
+import std.algorithm : map, filter, among, joiner, canFind;
 import std.conv : text;
-import std.exception;
-import std.file;
-import std.format;
-import std.getopt;
-import std.parallelism;
-import std.path;
-import std.process;
-import std.range;
+import std.exception : collectException;
+import std.file : isDir, dirEntries, exists, symlink, setAttributes, getAttributes;
+import std.format : format;
+import std.getopt : GetoptResult, getopt, defaultGetoptPrinter;
+import std.parallelism : TaskPool;
+import std.path : extension, buildPath, expandTilde, baseName, absolutePath, dirName;
+import std.range : enumerate, isInputRange;
+import std.array : array, appender;
 import std.regex : matchFirst, ctRegex;
-import std.stdio;
-import std.typecons;
-import std.variant;
+import std.stdio : writeln, writefln, File, stdin;
+import std.typecons : Tuple, Nullable, Flag;
+import std.sumtype;
 
 import colorlog;
 import my.optional;
-import sumtype;
 
 import autoformat.formatter_tools;
 import autoformat.git;
@@ -45,6 +44,8 @@ enum Mode {
     installGitHook,
     /// Check staged files for trailing whitespace
     checkGitTrailingWhitespace,
+    /// Dump config
+    dumpConfig,
 }
 
 /// The mode used to collect the files to process.
@@ -76,6 +77,7 @@ struct Config {
     Mode mode;
     FileMode fileMode;
     ToolMode formatMode;
+    ConfigDumpCommand configDumpCommand;
 }
 
 int main(string[] args) nothrow {
@@ -129,6 +131,8 @@ int main(string[] args) nothrow {
         return returnCode;
     case Mode.normal:
         return fileMode(conf);
+    case Mode.dumpConfig:
+        return dumpConfigMode(conf);
     }
 }
 
@@ -229,8 +233,23 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
     return returnCode;
 }
 
+int dumpConfigMode(Config conf) nothrow {
+    foreach (f; configurationDumpers) {
+        writeln(f).collectException;
+        try {
+            if (f[0](conf.configDumpCommand))
+                f[1]();
+        } catch (Exception e) {
+            logger.warning(e.msg).collectException;
+        }
+    }
+
+    return 0;
+}
+
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
     import std.traits : EnumMembers;
+    static import std.getopt;
 
     bool check_whitespace;
     bool dryRun;
@@ -251,6 +270,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
             "r|recursive", "autoformat recursive", &recursive,
             "setup", "finalize installation of autoformatter by creating symlinks", &setup,
             "stdin", "file list separated by newline read from", &stdin_,
+            "dump-config", format("dumps the config provided language. Supported (%-(%s, %))", [EnumMembers!ConfigDumpCommand].filter!(a => a != ConfigDumpCommand.noConfigDump)), &conf.configDumpCommand,
             "tool-detab", "whitespace checker and fixup (all filetypes, respects .noautoformat)", &tool_detab,
             "v|verbose", format("Set the verbosity (%-(%s, %))", [EnumMembers!(VerboseMode)]), &conf.verbosity,
             );
@@ -276,6 +296,8 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.mode = Mode.installGitHook;
     } else if (check_whitespace) {
         conf.mode = Mode.checkGitTrailingWhitespace;
+    } else if (conf.configDumpCommand != ConfigDumpCommand.noConfigDump) {
+        conf.mode = Mode.dumpConfig;
     }
 
     if (conf.mode != Mode.normal) {
@@ -398,6 +420,8 @@ FormatterResult parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf p
         break;
     }
 
+    static import std.algorithm;
+
     scope (exit)
         pool.stop;
     auto status = pool.reduce!merge(FormatterResult(Unchanged.init),
@@ -408,6 +432,8 @@ FormatterResult parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf p
 }
 
 Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
+    static import std.file;
+
     typeof(return) rval;
 
     if (!path.isDir) {
@@ -451,8 +477,7 @@ void printHelp(string arg0, ref GetoptResult help_info) nothrow {
 
     try {
         defaultGetoptPrinter(format(`Tool to format [c, c++, java, d, rust] source code
-Usage: %s [options] PATH`,
-                arg0), help_info.options);
+Usage: %s [options] PATH`, arg0), help_info.options);
     } catch (Exception ex) {
         logger.error("Unable to print command line interface help information to stdout")
             .collectException;
