@@ -14,13 +14,12 @@ import std.array;
 import std.exception;
 import std.process;
 import std.typecons : Flag;
+import std.stdio;
 
 import logger = std.experimental.logger;
 
 import autoformat.types;
-
-private immutable string[] astyleConf = import("astyle.conf").splitter("\n")
-    .filter!(a => a.length > 0).array ~ ["-Q"];
+import autoformat.common : loggedExecute;
 
 private immutable string[] clangFormatConf = import("clang_format.conf").splitter(
         "\n").filter!(a => a.length != 0).array;
@@ -31,20 +30,19 @@ private bool installed = true;
 
 immutable clangToolEnvKey = "AUTOFORMAT_CLANG_TOOL";
 
-auto getClangFormatterTool() @safe nothrow {
+string getClangFormatterTool() @safe nothrow {
     try {
         return environment.get(clangToolEnvKey, "clang-format");
     } catch (Exception e) {
     }
-    return "astyle";
+    return "clang-format";
 }
 
 auto runClangFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
-    string tool = getClangFormatterTool;
-    return runClangFormat(fname, backup, dry_run);
+    return runClangFormat(fname, getClangFormatterTool, backup, dry_run);
 }
 
-auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
+auto runClangFormat(AbsolutePath fname, string clangFormatExec, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     import std.file : copy;
 
     string[] opts = clangFormatConf.map!(a => a.idup).array;
@@ -58,7 +56,7 @@ auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_
     else
         opts ~= "-i";
 
-    auto arg = ["clang-format"] ~ opts ~ [cast(string) fname];
+    auto arg = [clangFormatExec] ~ opts ~ [cast(string) fname];
 
     auto rval = FormatterResult(FormatError.init);
 
@@ -69,8 +67,12 @@ auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_
 
         auto res = loggedExecute(arg);
 
-        if (dry_run && res.output.splitter("\n").count > 3) {
-            rval = FormatterResult(WouldChange.init);
+        if (dry_run) {
+            if (hasFormattingHints(res.output)) {
+                rval = FormatterResult(WouldChange.init);
+            } else {
+                rval = FormatterResult(Unchanged.init);
+            }
         } else {
             rval = FormatterResult(FormattedOk.init);
         }
@@ -85,9 +87,14 @@ auto runClangFormat(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_
     return rval;
 }
 
-auto loggedExecute(string[] arg) {
-    logger.trace(arg.join(" "));
-    auto res = execute(arg);
-    logger.trace(res.output);
-    return res;
+bool hasFormattingHints(string output) nothrow {
+    import dxml.parser;
+
+    try {
+        return parseXML(output).filter!(a => a.type == EntityType.elementStart
+                && a.name == "replacement").count != 0;
+    } catch (Exception e) {
+        logger.tracef("unable to XML parse '%s' : %s", output, e.msg).collectException;
+    }
+    return false;
 }

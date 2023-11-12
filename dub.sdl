@@ -8,6 +8,7 @@ targetPath "build"
 
 dependency "my" version="~>0.0.40"
 dependency "colorlog" version="~>0.0.9"
+dependency "dxml" version="~>0.4.4"
 
 configuration "application" {
     targetType "executable"
