@@ -1,5 +1,5 @@
 /**
-Copyright: Copyright (c) 2021, Joakim Brännström. All rights reserved.
+Copyright: Copyright (c) Joakim Brännström. All rights reserved.
 License: $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost Software License 1.0)
 Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 */
@@ -15,6 +15,7 @@ import std.datetime : SysTime, Clock, dur;
 import std.exception : collectException;
 import std.functional : toDelegate;
 import std.meta : staticMap;
+import std.sumtype;
 import std.traits : Parameters, Unqual, ReturnType, isFunctionPointer, isFunction;
 import std.typecons : Tuple, tuple;
 import std.variant : Variant;
@@ -25,7 +26,6 @@ import my.actor.msg;
 import my.actor.system : System;
 import my.actor.typed : isTypedAddress, isTypedActorImpl;
 import my.gc.refc;
-import sumtype;
 
 private struct PromiseData {
     WeakAddress replyTo;
@@ -132,7 +132,7 @@ alias ErrorHandler = void delegate(ref Actor self, ErrorMsg) @safe nothrow;
 alias ExitHandler = void delegate(ref Actor self, ExitMsg msg) @safe nothrow;
 
 /// An exception has been thrown while processing a message.
-alias ExceptionHandler = void delegate(ref Actor self, Exception e) @safe nothrow;
+alias ExceptionHandler = void delegate(ref Actor self, scope Exception e) @safe nothrow;
 
 /** Actors can monitor the lifetime of other actors by sending a `MonitorRequest`
  * to an address. This will cause the runtime system to send a `DownMsg` for
@@ -166,7 +166,7 @@ void defaultExitHandler(ref Actor self, ExitMsg msg) @safe nothrow {
     self.forceShutdown;
 }
 
-void defaultExceptionHandler(ref Actor self, Exception e) @safe nothrow {
+void defaultExceptionHandler(ref Actor self, scope Exception e) @safe nothrow {
     self.lastError = SystemError.runtimeError;
     // TODO: should log?
     self.forceShutdown;

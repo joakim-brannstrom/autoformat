@@ -1,0 +1,57 @@
+{
+	"authors": [
+		"Jonathan M Davis"
+	],
+	"buildTypes": {
+		"doCov": {
+			"buildOptions": [
+				"debugMode",
+				"coverage",
+				"debugInfo",
+				"unittests"
+			],
+			"versions": [
+				"dxmlTests"
+			]
+		},
+		"doReleaseTests": {
+			"buildOptions": [
+				"debugMode",
+				"releaseMode",
+				"debugInfo",
+				"unittests"
+			],
+			"versions": [
+				"dxmlTests"
+			]
+		},
+		"doTests": {
+			"buildOptions": [
+				"debugMode",
+				"debugInfo",
+				"unittests"
+			],
+			"versions": [
+				"dxmlTests"
+			]
+		}
+	},
+	"configurations": [
+		{
+			"name": "library",
+			"targetType": "library"
+		}
+	],
+	"copyright": "Copyright © 2017 - 2023, Jonathan M Davis",
+	"description": "An XML parser and writer written in D.",
+	"importPaths": [
+		"source/"
+	],
+	"license": "BSL-1.0",
+	"name": "dxml",
+	"sourcePaths": [
+		"source/"
+	],
+	"targetType": "library",
+	"version": "0.4.4"
+}
