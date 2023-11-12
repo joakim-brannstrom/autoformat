@@ -1,14 +1,13 @@
 name "autoformat"
 description "Autoformatter of source code with git hooks"
 authors "Joakim Brännström"
-copyright "Copyright © 2017, Joakim Brännström"
+copyright "Copyright, Joakim Brännström"
 license "BSL-1.0"
 
 targetPath "build"
 
-dependency "my" version="~>0.0.36"
-dependency "sumtype" version="~>1.2.4"
-dependency "colorlog" version="~>0.0.7"
+dependency "my" version="~>0.0.40"
+dependency "colorlog" version="~>0.0.9"
 
 configuration "application" {
     targetType "executable"

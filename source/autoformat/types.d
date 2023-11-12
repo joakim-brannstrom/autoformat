@@ -5,7 +5,7 @@ Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 */
 module autoformat.types;
 
-import sumtype;
+import std.sumtype;
 public import my.path : Path, AbsolutePath;
 
 /// failed to format or some other kind of error

@@ -6,24 +6,23 @@ Author: Joakim Brännström (joakim.brannstrom@gmx.com)
 module autoformat.app;
 
 import logger = std.experimental.logger;
-import std.algorithm;
+import std.algorithm : map, filter, among, joiner, canFind;
 import std.conv : text;
-import std.exception;
-import std.file;
-import std.format;
-import std.getopt;
-import std.parallelism;
-import std.path;
-import std.process;
-import std.range;
+import std.exception : collectException;
+import std.file : isDir, dirEntries, exists, symlink, setAttributes, getAttributes;
+import std.format : format;
+import std.getopt : GetoptResult, getopt, defaultGetoptPrinter;
+import std.parallelism : TaskPool;
+import std.path : extension, buildPath, expandTilde, baseName, absolutePath, dirName;
+import std.range : enumerate, isInputRange;
+import std.array : array, appender;
 import std.regex : matchFirst, ctRegex;
-import std.stdio;
-import std.typecons;
-import std.variant;
+import std.stdio : writeln, writefln, File, stdin;
+import std.typecons : Tuple, Nullable, Flag;
+import std.sumtype;
 
 import colorlog;
 import my.optional;
-import sumtype;
 
 import autoformat.formatter_tools;
 import autoformat.git;
@@ -231,6 +230,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
 
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
     import std.traits : EnumMembers;
+    static import std.getopt;
 
     bool check_whitespace;
     bool dryRun;
@@ -398,6 +398,8 @@ FormatterResult parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf p
         break;
     }
 
+    static import std.algorithm;
+
     scope (exit)
         pool.stop;
     auto status = pool.reduce!merge(FormatterResult(Unchanged.init),
@@ -408,6 +410,8 @@ FormatterResult parallelRun(alias Func, ArgsT)(AbsolutePath[] files_, PoolConf p
 }
 
 Nullable!(AbsolutePath[]) recursiveFileList(AbsolutePath path) {
+    static import std.file;
+
     typeof(return) rval;
 
     if (!path.isDir) {
@@ -451,8 +455,7 @@ void printHelp(string arg0, ref GetoptResult help_info) nothrow {
 
     try {
         defaultGetoptPrinter(format(`Tool to format [c, c++, java, d, rust] source code
-Usage: %s [options] PATH`,
-                arg0), help_info.options);
+Usage: %s [options] PATH`, arg0), help_info.options);
     } catch (Exception ex) {
         logger.error("Unable to print command line interface help information to stdout")
             .collectException;
