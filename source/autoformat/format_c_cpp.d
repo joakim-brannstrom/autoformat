@@ -38,11 +38,16 @@ string getClangFormatterTool() @safe nothrow {
     return "clang-format";
 }
 
+bool isClangFormatSupportedConfigDump(ConfigDumpCommand lang) nothrow {
+    return lang == ConfigDumpCommand.cpp;
+}
+
 auto runClangFormatter(AbsolutePath fname, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     return runClangFormat(fname, getClangFormatterTool, backup, dry_run);
 }
 
-auto runClangFormat(AbsolutePath fname, string clangFormatExec, Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
+auto runClangFormat(AbsolutePath fname, string clangFormatExec,
+        Flag!"backup" backup, Flag!"dryRun" dry_run) nothrow {
     import std.file : copy;
 
     string[] opts = clangFormatConf.map!(a => a.idup).array;
@@ -97,4 +102,20 @@ bool hasFormattingHints(string output) nothrow {
         logger.tracef("unable to XML parse '%s' : %s", output, e.msg).collectException;
     }
     return false;
+}
+
+int dumpClangFormatConfig() nothrow {
+    try {
+        logger.warning("hej");
+        auto cmd = [getClangFormatterTool] ~ clangFormatConf.map!(a => a.idup)
+            .array ~ "--dump-config";
+        logger.info(cmd);
+        auto ecode = spawnProcess(cmd).wait;
+        if (ecode != 0)
+            logger.warning("Failed dumping clang-format config");
+        return ecode;
+    } catch (Exception e) {
+        logger.warning("Cannot dump clang-format config: e.msg").collectException;
+    }
+    return 1;
 }

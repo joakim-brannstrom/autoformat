@@ -44,6 +44,8 @@ enum Mode {
     installGitHook,
     /// Check staged files for trailing whitespace
     checkGitTrailingWhitespace,
+    /// Dump config
+    dumpConfig,
 }
 
 /// The mode used to collect the files to process.
@@ -75,6 +77,7 @@ struct Config {
     Mode mode;
     FileMode fileMode;
     ToolMode formatMode;
+    ConfigDumpCommand configDumpCommand;
 }
 
 int main(string[] args) nothrow {
@@ -128,6 +131,8 @@ int main(string[] args) nothrow {
         return returnCode;
     case Mode.normal:
         return fileMode(conf);
+    case Mode.dumpConfig:
+        return dumpConfigMode(conf);
     }
 }
 
@@ -228,6 +233,20 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
     return returnCode;
 }
 
+int dumpConfigMode(Config conf) nothrow {
+    foreach (f; configurationDumpers) {
+        writeln(f).collectException;
+        try {
+            if (f[0](conf.configDumpCommand))
+                f[1]();
+        } catch (Exception e) {
+            logger.warning(e.msg).collectException;
+        }
+    }
+
+    return 0;
+}
+
 void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) nothrow {
     import std.traits : EnumMembers;
     static import std.getopt;
@@ -251,6 +270,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
             "r|recursive", "autoformat recursive", &recursive,
             "setup", "finalize installation of autoformatter by creating symlinks", &setup,
             "stdin", "file list separated by newline read from", &stdin_,
+            "dump-config", format("dumps the config provided language. Supported (%-(%s, %))", [EnumMembers!ConfigDumpCommand].filter!(a => a != ConfigDumpCommand.noConfigDump)), &conf.configDumpCommand,
             "tool-detab", "whitespace checker and fixup (all filetypes, respects .noautoformat)", &tool_detab,
             "v|verbose", format("Set the verbosity (%-(%s, %))", [EnumMembers!(VerboseMode)]), &conf.verbosity,
             );
@@ -276,6 +296,8 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         conf.mode = Mode.installGitHook;
     } else if (check_whitespace) {
         conf.mode = Mode.checkGitTrailingWhitespace;
+    } else if (conf.configDumpCommand != ConfigDumpCommand.noConfigDump) {
+        conf.mode = Mode.dumpConfig;
     }
 
     if (conf.mode != Mode.normal) {

@@ -26,10 +26,18 @@ alias FormatterFunc = FormatterResult function(AbsolutePath p,
 alias FormatterCheckFunc = bool function(string p);
 alias Formatter = Tuple!(FormatterCheckFunc, FormatterFunc);
 
+alias DumpFunc = int function() nothrow;
+alias DumpCheckFunc = bool function(ConfigDumpCommand lang);
+alias ConfigDumper = Tuple!(DumpCheckFunc, DumpFunc);
+
 // dfmt off
 enum formatters = [
     Formatter(&isC_CppFiletype, &runClangFormatter),
     Formatter(&isDFiletype, &runDfmt),
     Formatter(&isRustFiletype, &runRustFormatter),
+];
+
+enum configurationDumpers = [
+    ConfigDumper(&isClangFormatSupportedConfigDump, &dumpClangFormatConfig)
 ];
 // dfmt on

@@ -31,3 +31,9 @@ struct WouldChange {
 
 alias FormatterResult = SumType!(FormatError, FailedWithUserMsg, Unchanged,
         FormattedOk, WouldChange);
+
+/// The languages for which there are available config dumpers
+enum ConfigDumpCommand {
+    noConfigDump,
+    cpp
+}
