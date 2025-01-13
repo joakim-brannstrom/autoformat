@@ -71,6 +71,7 @@ unittest {
         testDryRun();
         testRecursive();
         testRecursiveSkipDir();
+        testRecursiveIgnoreSkipDir();
         testSetup();
     }
 
@@ -302,6 +303,30 @@ void testRecursiveSkipDir() {
 
     assert(autoformat(ta, "-r", ta.sandboxPath).status == 0);
     assert(dirEntries(".", SpanMode.depth).filter!(a => a.baseName.endsWith(".orig")).count == 81);
+}
+
+// shall ignore ".noautoformat"
+void testRecursiveIgnoreSkipDir() {
+    auto ta = makeTestArea(__FUNCTION__);
+    ta.chdirToSandbox;
+    string base_dir;
+    foreach (i; 0 .. 101) {
+        if (i % 10 == 0) {
+            base_dir = "d" ~ i.to!string;
+            mkdir(base_dir);
+        }
+
+        if (i == 55) {
+            ta.exec("touch", buildPath(base_dir, ".noautoformat"));
+        } else if (i == 72) {
+            ta.exec("touch", buildPath(base_dir, ".noautoformat"));
+        } else {
+            createUnformattedCpp(buildPath(base_dir, "file_" ~ i.to!string ~ ".cpp"));
+        }
+    }
+
+    assert(autoformat(ta, "-f", "-r", ta.sandboxPath).status == 0);
+    assert(dirEntries(".", SpanMode.depth).filter!(a => a.baseName.endsWith(".orig")).count == 99);
 }
 
 void testSetup() {
