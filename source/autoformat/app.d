@@ -78,6 +78,7 @@ struct Config {
     FileMode fileMode;
     ToolMode formatMode;
     ConfigDumpCommand configDumpCommand;
+    bool ignoreNoAutoformat;
 }
 
 int main(string[] args) nothrow {
@@ -180,7 +181,7 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
     import std.conv : to;
     import std.typecons : tuple;
 
-    const auto tconf = ToolConf(conf.dryRun, conf.backup);
+    const auto tconf = ToolConf(conf.dryRun, conf.backup, conf.ignoreNoAutoformat);
     const auto pconf = conf.verbosity == VerboseMode.trace ? PoolConf.debug_ : PoolConf.auto_;
     FormatterResult result;
 
@@ -264,6 +265,7 @@ void parseArgs(ref string[] args, ref Config conf, ref GetoptResult help_info) n
         // dfmt off
         help_info = getopt(args, std.getopt.config.keepEndOfOptions,
             "check-trailing-whitespace", "check files for trailing whitespace", &check_whitespace,
+            "f|force", "force formatting of file by ignoring .noautoformat", &conf.ignoreNoAutoformat,
             "i|install-hook", "install git hooks to autoformat during commit of added or modified files", &conf.installHook,
             "no-backup", "no backup file is created", &noBackup,
             "n|dry-run", "(ONLY supported by c, c++, java) perform a trial run with no changes made to the files. Exit status != 0 indicates a change would have occured if ran without --dry-run", &dryRun,
@@ -349,7 +351,7 @@ struct OneFileConf {
     ToolConf conf;
 }
 
-alias ToolConf = Tuple!(Flag!"dryRun", "dryRun", Flag!"backup", "backup");
+alias ToolConf = Tuple!(Flag!"dryRun", "dryRun", Flag!"backup", "backup", bool, "ignoreSupressOfFormat");
 
 FormatterResult oneFileRespectKind(OneFileConf f) nothrow {
     try {
@@ -361,7 +363,9 @@ FormatterResult oneFileRespectKind(OneFileConf f) nothrow {
     }
 
     auto res = isOkToFormat(f.value);
-    if (!res.ok) {
+    if (f.conf.ignoreSupressOfFormat && !res.ok) {
+        // ignore the magic supress file.
+    } else if (!res.ok) {
         try {
             logger.warningf("%s %s", f.index + 1, res.payload);
         } catch (Exception ex) {
