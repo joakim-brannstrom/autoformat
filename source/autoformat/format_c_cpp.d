@@ -106,10 +106,9 @@ bool hasFormattingHints(string output) nothrow {
 
 int dumpClangFormatConfig() nothrow {
     try {
-        logger.warning("hej");
         auto cmd = [getClangFormatterTool] ~ clangFormatConf.map!(a => a.idup)
             .array ~ "--dump-config";
-        logger.info(cmd);
+        logger.trace(cmd);
         auto ecode = spawnProcess(cmd).wait;
         if (ecode != 0)
             logger.warning("Failed dumping clang-format config");
