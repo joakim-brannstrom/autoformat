@@ -236,7 +236,6 @@ int formatMode(Config conf, AbsolutePath[] files) nothrow {
 
 int dumpConfigMode(Config conf) nothrow {
     foreach (f; configurationDumpers) {
-        writeln(f).collectException;
         try {
             if (f[0](conf.configDumpCommand))
                 f[1]();
